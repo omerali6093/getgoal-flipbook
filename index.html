@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JIA Flipbook Demo</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 30px 20px;
+      background: #19271e;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+  </style>
+  <link rel="stylesheet" href="dist/flipbook.css?v=2" />
+</head>
+<body>
+  <div
+    class="jia-flipbook-wrap"
+    style="max-width: 1400px;"
+    data-images='[
+      "assets/images/page-1.jpeg",
+      "assets/images/page-2.jpeg",
+      "assets/images/page-3.jpg",
+      "assets/images/page-4.jpg",
+      "assets/images/page-5.jpeg",
+      "assets/images/page-6.jpeg",
+      "assets/images/page-7.jpeg",
+      "assets/images/page-8.jpeg",
+      "assets/images/page-9.jpeg",
+      "assets/images/page-10.mp4",
+      "assets/images/page-11.mp4",
+      "assets/images/page-12.jpeg",
+      "assets/images/page-13.jpeg",
+      "assets/images/page-14.mp4"
+    ]'
+  >
+    <div class="jia-flipbook-stage">
+      <div class="jia-flipbook-book"></div>
+      <div class="jia-fb-corner-hint jia-fb-hint">›</div>
+    </div>
+
+    <div class="jia-flipbook-toolbar">
+      <button type="button" class="jia-fb-prev" aria-label="Previous page">&#8249;</button>
+      <div class="jia-fb-page-indicator">
+        <span class="jia-fb-current">1</span> / <span class="jia-fb-total">18</span>
+      </div>
+      <button type="button" class="jia-fb-next" aria-label="Next page">&#8250;</button>
+      <button type="button" class="jia-fb-fullscreen" aria-label="Toggle fullscreen">&#9974;</button>
+    </div>
+
+    <div class="jia-flipbook-loader jia-fb-hint">
+      <div class="jia-fb-spinner"></div>
+      <span>Loading flipbook…</span>
+    </div>
+  </div>
+
+  <script src="dist/flipbook.js?v=2"></script>
+</body>
+</html>
