@@ -80,13 +80,28 @@ final class JIA_Flipbook_Plugin {
 	}
 
 	/**
-	 * Returns the ordered list of page image URLs.
-	 * Reads assets/images/page-01.jpg ... page-NN.jpg (numeric order),
-	 * falling back gracefully if fewer/more files are present.
+	 * Returns the ordered list of page media URLs.
+	 * Reads supported page media from assets/images/page-NN.ext in numeric
+	 * order, falling back gracefully if fewer/more files are present.
 	 */
 	private function get_page_images() {
 		$dir = $this->path( 'assets/images' );
-		$files = glob( $dir . '/page-*.jpg' );
+		$files = array();
+
+		/*
+		 * Keep this list aligned with the media types handled by the
+		 * frontend. Using separate glob calls avoids relying on GLOB_BRACE,
+		 * which is not consistently available across PHP environments.
+		 */
+		$extensions = array( 'jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'webm', 'ogg', 'mov' );
+
+		foreach ( $extensions as $extension ) {
+			$matches = glob( $dir . '/page-*.' . $extension );
+
+			if ( $matches ) {
+				$files = array_merge( $files, $matches );
+			}
+		}
 
 		if ( ! $files ) {
 			return array();
