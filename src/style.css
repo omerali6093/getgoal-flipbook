@@ -190,7 +190,8 @@
     margin: 0;
     padding: 0;
 
-    object-fit: cover;
+    object-fit: contain;
+    object-position: center;
 
     user-select: none;
 
@@ -223,7 +224,8 @@
     margin: 0;
     padding: 0;
 
-    object-fit: cover;
+    object-fit: contain;
+    object-position: center;
 
     user-select: none;
 
