@@ -151,7 +151,9 @@
  */
 .jia-cover-view .jia-flipbook-book {
     transform: translateX(-25%);
+    box-shadow: none !important;
 }
+
 .jia-cover-view .stf__outerShadow,
 .jia-cover-view .stf__innerShadow,
 .jia-cover-view .stf__hardShadow,
@@ -159,7 +161,6 @@
 .jia-cover-view .jia-fb-page[data-page-index="0"] .jia-fb-shade {
     display: none !important;
 }
-
 
 /* ---------------------------------------------------------
    5. PAGES

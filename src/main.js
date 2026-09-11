@@ -505,6 +505,32 @@ function initFlipbook(root) {
     updateIndicator(pageIndex);
 
     /*
+     * COVER VIEW LOGIC
+     *
+     * Keep the original initial-cover behavior.
+     *
+     * When the user returns to page 1 using the
+     * Previous button, restore the same cover state.
+     *
+     * This removes the book shadow and restores the
+     * cover positioning only when page 1 is actually reached.
+     */
+
+    if (pageIndex === 0) {
+
+        root.classList.add(
+            'jia-cover-view'
+        );
+
+    } else {
+
+        root.classList.remove(
+            'jia-cover-view'
+        );
+
+    }
+
+    /*
      * IMPORTANT:
      *
      * No GSAP filter/transform is applied here.
@@ -514,8 +540,7 @@ function initFlipbook(root) {
      * create a temporary duplicate/compositing artifact.
      */
 
-  });
-
+});
 
   /* -------------------------------------------------------
      INITIALIZATION
