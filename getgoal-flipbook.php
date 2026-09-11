@@ -1,12 +1,10 @@
 <?php
 /**
  * Plugin Name:       GETGOAL 3D Flipbook
- * Plugin URI:        https://hiranis.com
- * Description:       A smooth, 3D page-flip book (StPageFlip + GSAP) for the "Living with JIA — Guide for Parents" booklet. Use the [jia_flipbook] shortcode anywhere.
+ * Description:       A smooth, 3D page-flip book (StPageFlip + GSAP) for the "GetGoal Portfolio showcas". Use the [getgoal_flipbook] shortcode anywhere.
  * Version:           1.0.0
- * Author:            Hiranis Pharmaceuticals
- * License:           GPL-2.0-or-later
- * Text Domain:       jia-flipbook
+ * Author:            GetGoal Solutions
+ * Text Domain:       getgoal-flipbook
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
