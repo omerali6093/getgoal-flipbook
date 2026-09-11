@@ -85,6 +85,7 @@ final class JIA_Flipbook_Plugin {
 	private function get_page_images() {
 		$dir = $this->path( 'assets/images' );
 		$files = array();
+		$cover = array();
 
 		/*
 		 * Keep this list aligned with the media types handled by the
@@ -92,6 +93,23 @@ final class JIA_Flipbook_Plugin {
 		 * which is not consistently available across PHP environments.
 		 */
 		$extensions = array( 'jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'webm', 'ogg', 'mov' );
+
+
+				/*
+		 * The front cover is stored separately from numbered pages so it
+		 * always appears first in the book, regardless of its filename.
+		 */
+		$cover_names = array( 'cover-page', 'cover_page', 'cover page', 'cover' );
+		foreach ( $cover_names as $cover_name ) {
+			foreach ( $extensions as $extension ) {
+				$cover_file = $dir . '/' . $cover_name . '.' . $extension;
+				if ( file_exists( $cover_file ) ) {
+					$cover[] = $cover_file;
+					break 2;
+				}
+			}
+		}
+
 
 		foreach ( $extensions as $extension ) {
 			$matches = glob( $dir . '/page-*.' . $extension );
@@ -101,12 +119,12 @@ final class JIA_Flipbook_Plugin {
 			}
 		}
 
-		if ( ! $files ) {
+		if ( ! $files && ! $cover  ) {
 			return array();
 		}
 
 		natsort( $files );
-		$files = array_values( $files );
+		$files = array_merge( $cover, array_values( $files ) );
 
 		$urls = array();
 		foreach ( $files as $file ) {

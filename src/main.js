@@ -146,6 +146,7 @@ function initFlipbook(root) {
     return;
   }
 
+  root.classList.add('jia-cover-view');
 
   /* -------------------------------------------------------
      ELEMENTS
@@ -468,6 +469,8 @@ function initFlipbook(root) {
     if (state === 'flipping') {
 
       isFlipping = true;
+
+      root.classList.remove('jia-cover-view');
 
       root.classList.add(
         'jia-is-flipping'

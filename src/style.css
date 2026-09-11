@@ -144,6 +144,23 @@
 }
 
 
+/*
+ * The cover is the right page of the initial landscape spread. Shift the
+ * rendered book by half a page while it is the only visible page, then let
+ * PageFlip use its normal centered two-page layout after the first turn.
+ */
+.jia-cover-view .jia-flipbook-book {
+    transform: translateX(-25%);
+}
+.jia-cover-view .stf__outerShadow,
+.jia-cover-view .stf__innerShadow,
+.jia-cover-view .stf__hardShadow,
+.jia-cover-view .stf__hardInnerShadow,
+.jia-cover-view .jia-fb-page[data-page-index="0"] .jia-fb-shade {
+    display: none !important;
+}
+
+
 /* ---------------------------------------------------------
    5. PAGES
    IMPORTANT — DO NOT CHANGE THIS
