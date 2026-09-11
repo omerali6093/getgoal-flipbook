@@ -242,12 +242,12 @@
     margin: 0;
     padding: 0;
 
-    object-fit: contain;
-    object-position: center;
+    object-fit: cover;
+    /* object-position: center; */
 
     user-select: none;
 
-    pointer-events: none;
+    /* pointer-events: none; */
 
     -webkit-user-drag: none;
 
