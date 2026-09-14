@@ -16,9 +16,29 @@ import './style.css';
  * - Keeps soft paper/page behavior
  */
 
-const ASPECT_RATIO = 1241 / 1754;
+const ASPECT_RATIO = 1080 / 1920; // 9:16 portrait (1080 x 1920 Full HD)
 const FLIP_TIME = 800;
 const PRELOAD_DISTANCE = 3;
+
+function parseAspectRatio(val, fallback = ASPECT_RATIO) {
+  if (!val) return fallback;
+  if (typeof val === 'number') return val > 0 ? val : fallback;
+  const str = String(val).trim();
+  if (str.includes(':')) {
+    const parts = str.split(':').map(Number);
+    if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
+      return parts[0] / parts[1];
+    }
+  }
+  if (str.includes('/')) {
+    const parts = str.split('/').map(Number);
+    if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
+      return parts[0] / parts[1];
+    }
+  }
+  const num = parseFloat(str);
+  return !isNaN(num) && num > 0 ? num : fallback;
+}
 
 
 /* ---------------------------------------------------------
@@ -31,16 +51,25 @@ function isVideoSrc(src) {
   return VIDEO_EXTENSIONS.test(src);
 }
 
-function buildPageNode(src, alt, index) {
+function buildPageNode(src, alt, index, total) {
   const page = document.createElement('div');
+  const isFirst = index === 0;
+  const isLast = typeof total === 'number' && index === total - 1;
 
   page.className = 'jia-fb-page';
+  if (isFirst) {
+    page.classList.add('jia-fb-page-cover', 'jia-fb-page-first');
+  }
+  if (isLast) {
+    page.classList.add('jia-fb-page-cover', 'jia-fb-page-last');
+  }
   page.setAttribute('data-density', 'soft');
   page.setAttribute('data-page-index', String(index));
 
   let media;
 
   if (isVideoSrc(src)) {
+    page.classList.add('jia-fb-page-video');
 
     /*
      * Video page — autoplay, muted, loop so it
@@ -196,7 +225,8 @@ function initFlipbook(root) {
       buildPageNode(
         src,
         `JIA Guide page ${index + 1}`,
-        index
+        index,
+        images.length
       )
     );
   });
@@ -213,6 +243,11 @@ function initFlipbook(root) {
      CALCULATE INITIAL SIZE
   ------------------------------------------------------- */
 
+  const aspectAttr =
+    root.getAttribute('data-aspect-ratio') ||
+    root.getAttribute('data-ratio');
+  const aspectRatio = parseAspectRatio(aspectAttr, ASPECT_RATIO);
+
   const containerWidth =
     stage.clientWidth || 1100;
 
@@ -224,7 +259,7 @@ function initFlipbook(root) {
   );
 
   const baseHeight = Math.round(
-    baseWidth / ASPECT_RATIO
+    baseWidth / aspectRatio
   );
 
 
@@ -239,11 +274,11 @@ function initFlipbook(root) {
 
   size: 'stretch',
 
-  minWidth: 220,
+  minWidth: 200,
   maxWidth: 1500,
 
   minHeight: 300,
-  maxHeight: 2000,
+  maxHeight: 2500,
 
   flippingTime: 800,
 

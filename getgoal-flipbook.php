@@ -141,6 +141,7 @@ final class JIA_Flipbook_Plugin {
 		$atts = shortcode_atts(
 			array(
 				'width' => '1350', // max-width in px of the whole flipbook widget
+				'ratio' => '1080:1920', // default page aspect ratio
 			),
 			$atts,
 			'getgoal_flipbook'
@@ -170,6 +171,7 @@ final class JIA_Flipbook_Plugin {
 			class="jia-flipbook-wrap"
 			style="max-width: <?php echo esc_attr( $max_width ); ?>px;"
 			data-images='<?php echo esc_attr( wp_json_encode( $images ) ); ?>'
+			data-aspect-ratio="<?php echo esc_attr( $atts['ratio'] ); ?>"
 		>
 			<div class="jia-flipbook-stage">
 				<div class="jia-flipbook-book"></div>
