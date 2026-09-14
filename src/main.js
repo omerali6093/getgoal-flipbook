@@ -273,76 +273,7 @@ function initFlipbook(root) {
   startPage: 0
 });
 
-  // const pageFlip = new PageFlip(bookEl, {
-
-  //   width: baseWidth,
-  //   height: baseHeight,
-
-  //   size: 'stretch',
-
-  //   minWidth: 220,
-  //   maxWidth: 1000,
-
-  //   minHeight: 300,
-  //   maxHeight: 1400,
-
-  //   /*
-  //    * Slightly faster than the old 950ms.
-  //    * 800ms gives a smooth but responsive paper flip.
-  //    */
-  //   flippingTime: FLIP_TIME,
-
-  //   /*
-  //    * Keep portrait support for mobile.
-  //    */
-  //   usePortrait: true,
-
-  //   /*
-  //    * Let PageFlip manage its own shadows.
-  //    */
-  //   drawShadow: true,
-  //   maxShadowOpacity: 0.55,
-
-  //   /*
-  //    * Keep the cover behavior.
-  //    */
-  //   showCover: true,
-
-  //   /*
-  //    * Responsive sizing.
-  //    */
-  //   autoSize: true,
-
-  //   /*
-  //    * Touch / mouse.
-  //    */
-  //   mobileScrollSupport: true,
-  //   useMouseEvents: true,
-
-  //   swipeDistance: 30,
-
-  //   /*
-  //    * Allow clicks on page content.
-  //    */
-  //   clickEventForward: true,
-
-  //   /*
-  //    * Normal click-to-flip behavior.
-  //    */
-  //   disableFlipByClick: false,
-
-  //   /*
-  //    * Corner interaction.
-  //    */
-  //   showPageCorners: true,
-
-  //   /*
-  //    * Starting page.
-  //    */
-  //   startPage: 0
-  // });
-
-  
+ 
 
 
   /* -------------------------------------------------------
@@ -1047,10 +978,6 @@ window.JIAFlipbookInit = initAll;
 
 
 
-
-
-
-// import { PageFlip } from 'page-flip';
 // import gsap from 'gsap';
 // import './style.css';
 
