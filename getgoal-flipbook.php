@@ -38,6 +38,7 @@ final class JIA_Flipbook_Plugin {
 	private function __construct() {
 		add_action( 'wp_enqueue_scripts', array( $this, 'register_assets' ) );
 		add_shortcode( 'getgoal_flipbook', array( $this, 'render_shortcode' ) );
+		add_shortcode( 'jia_flipbook', array( $this, 'render_shortcode' ) );
 	}
 
 	private function url( $path = '' ) {
@@ -89,13 +90,14 @@ final class JIA_Flipbook_Plugin {
 
 		/*
 		 * Keep this list aligned with the media types handled by the
-		 * frontend. Using separate glob calls avoids relying on GLOB_BRACE,
-		 * which is not consistently available across PHP environments.
+		 * frontend. Support both lowercase and uppercase for Linux hosts.
 		 */
-		$extensions = array( 'jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'webm', 'ogg', 'mov' );
+		$extensions = array(
+			'jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'webm', 'ogg', 'mov',
+			'JPG', 'JPEG', 'PNG', 'WEBP', 'GIF', 'MP4', 'WEBM', 'OGG', 'MOV',
+		);
 
-
-				/*
+		/*
 		 * The front cover is stored separately from numbered pages so it
 		 * always appears first in the book, regardless of its filename.
 		 */
@@ -110,7 +112,6 @@ final class JIA_Flipbook_Plugin {
 			}
 		}
 
-
 		foreach ( $extensions as $extension ) {
 			$matches = glob( $dir . '/page-*.' . $extension );
 
@@ -119,7 +120,7 @@ final class JIA_Flipbook_Plugin {
 			}
 		}
 
-		if ( ! $files && ! $cover  ) {
+		if ( ! $files && ! $cover ) {
 			return array();
 		}
 
@@ -135,13 +136,13 @@ final class JIA_Flipbook_Plugin {
 	}
 
 	/**
-	 * Shortcode: [jia_flipbook width="1100"]
+	 * Shortcode: [getgoal_flipbook width="1400"]
 	 */
 	public function render_shortcode( $atts ) {
 		$atts = shortcode_atts(
 			array(
-				'width' => '1350', // max-width in px of the whole flipbook widget
-				'ratio' => '1080:1920', // default page aspect ratio
+				'width' => '1400', // max-width in px of the whole flipbook widget
+				'ratio' => '1080:1920', // default page aspect ratio (1080x1920)
 			),
 			$atts,
 			'getgoal_flipbook'
@@ -149,7 +150,7 @@ final class JIA_Flipbook_Plugin {
 
 		$images = $this->get_page_images();
 		if ( empty( $images ) ) {
-			return '<p class="jia-flipbook-error">' . esc_html__( 'JIA Flipbook: no page images found in /assets/images.', 'jia-flipbook' ) . '</p>';
+			return '<p class="jia-flipbook-error">' . esc_html__( 'GETGOAL Flipbook: no page images found in /assets/images.', 'getgoal-flipbook' ) . '</p>';
 		}
 
 		wp_enqueue_style( self::SLUG );
@@ -161,8 +162,10 @@ final class JIA_Flipbook_Plugin {
 
 		$max_width = absint( $atts['width'] );
 		if ( $max_width < 300 ) {
-			$max_width = 1350;
+			$max_width = 1400;
 		}
+
+		$total_pages = count( $images );
 
 		ob_start();
 		?>
@@ -175,21 +178,20 @@ final class JIA_Flipbook_Plugin {
 		>
 			<div class="jia-flipbook-stage">
 				<div class="jia-flipbook-book"></div>
-				<div class="jia-fb-corner-hint jia-fb-hint">›</div>
 			</div>
 
 			<div class="jia-flipbook-toolbar">
-				<button type="button" class="jia-fb-prev" aria-label="<?php esc_attr_e( 'Previous page', 'jia-flipbook' ); ?>">&#8249;</button>
+				<button type="button" class="jia-fb-prev" aria-label="<?php esc_attr_e( 'Previous page', 'getgoal-flipbook' ); ?>">&#8249;</button>
 				<div class="jia-fb-page-indicator">
-					<span class="jia-fb-current">1</span> / <span class="jia-fb-total">1</span>
+					<span class="jia-fb-current">1</span> / <span class="jia-fb-total"><?php echo esc_html( $total_pages ); ?></span>
 				</div>
-				<button type="button" class="jia-fb-next" aria-label="<?php esc_attr_e( 'Next page', 'jia-flipbook' ); ?>">&#8250;</button>
-				<button type="button" class="jia-fb-fullscreen" aria-label="<?php esc_attr_e( 'Toggle fullscreen', 'jia-flipbook' ); ?>">&#9974;</button>
+				<button type="button" class="jia-fb-next" aria-label="<?php esc_attr_e( 'Next page', 'getgoal-flipbook' ); ?>">&#8250;</button>
+				<button type="button" class="jia-fb-fullscreen" aria-label="<?php esc_attr_e( 'Toggle fullscreen', 'getgoal-flipbook' ); ?>">&#9974;</button>
 			</div>
 
 			<div class="jia-flipbook-loader jia-fb-hint">
 				<div class="jia-fb-spinner"></div>
-				<span><?php esc_html_e( 'Loading flipbook…', 'jia-flipbook' ); ?></span>
+				<span><?php esc_html_e( 'Loading flipbook…', 'getgoal-flipbook' ); ?></span>
 			</div>
 		</div>
 		<?php
