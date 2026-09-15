@@ -36,7 +36,7 @@ final class JIA_Flipbook_Plugin {
 	}
 
 	private function __construct() {
-		add_action( 'wp_enqueue_scripts', array( $this, 'register_assets' ) );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_shortcode( 'getgoal_flipbook', array( $this, 'render_shortcode' ) );
 		add_shortcode( 'jia_flipbook', array( $this, 'render_shortcode' ) );
 	}
@@ -50,18 +50,17 @@ final class JIA_Flipbook_Plugin {
 	}
 
 	/**
-	 * Register (but don't force-print) the built JS/CSS. Actual enqueue
-	 * happens lazily the first time the shortcode is rendered, so the
-	 * assets never load on pages that don't use the flipbook.
+	 * Enqueue the built JS/CSS on wp_enqueue_scripts so WordPress places
+	 * them in <head> and <footer> during normal page rendering.
 	 */
-	public function register_assets() {
+	public function enqueue_assets() {
 		$css_file = $this->path( 'dist/flipbook.css' );
 		$js_file  = $this->path( 'dist/flipbook.js' );
 
 		$css_ver = file_exists( $css_file ) ? filemtime( $css_file ) : self::VERSION;
 		$js_ver  = file_exists( $js_file ) ? filemtime( $js_file ) : self::VERSION;
 
-		wp_register_style(
+		wp_enqueue_style(
 			self::SLUG,
 			$this->url( 'dist/flipbook.css' ),
 			array(),
@@ -69,7 +68,7 @@ final class JIA_Flipbook_Plugin {
 		);
 
 		// Vite builds this as an IIFE, so no ES module type / dependencies needed.
-		wp_register_script(
+		wp_enqueue_script(
 			self::SLUG,
 			$this->url( 'dist/flipbook.js' ),
 			array(),
@@ -166,8 +165,19 @@ final class JIA_Flipbook_Plugin {
 		}
 
 		$total_pages = count( $images );
+		$css_path    = $this->path( 'dist/flipbook.css' );
+		$inline_css  = file_exists( $css_path ) ? file_get_contents( $css_path ) : '';
+		$js_url      = $this->url( 'dist/flipbook.js' );
+		$js_file     = $this->path( 'dist/flipbook.js' );
+		$js_ver      = file_exists( $js_file ) ? filemtime( $js_file ) : self::VERSION;
 
 		ob_start();
+
+		// Inline the CSS so styling is 100% guaranteed on live WordPress,
+		// completely immune to WP Rocket, caching plugins, or late head-enqueue issues.
+		if ( ! empty( $inline_css ) ) {
+			echo '<style id="getgoal-flipbook-core-css">' . $inline_css . '</style>';
+		}
 		?>
 		<div
 			id="<?php echo esc_attr( $uid ); ?>"
@@ -194,6 +204,26 @@ final class JIA_Flipbook_Plugin {
 				<span><?php esc_html_e( 'Loading flipbook…', 'getgoal-flipbook' ); ?></span>
 			</div>
 		</div>
+
+		<script id="getgoal-flipbook-bundle-js" src="<?php echo esc_url( $js_url . '?ver=' . $js_ver ); ?>"></script>
+		<script>
+		(function() {
+			function initFlipbook() {
+				if (typeof window.JIAFlipbookInit === 'function') {
+					window.JIAFlipbookInit();
+				}
+			}
+			if (document.readyState === 'loading') {
+				document.addEventListener('DOMContentLoaded', initFlipbook);
+			} else {
+				initFlipbook();
+			}
+			window.addEventListener('load', initFlipbook);
+			if (window.jQuery) {
+				window.jQuery(document).on('elementor/frontend/init', initFlipbook);
+			}
+		})();
+		</script>
 		<?php
 		return ob_get_clean();
 	}
