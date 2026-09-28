@@ -695,6 +695,53 @@ function initFlipbook(root) {
 
 
   /* -------------------------------------------------------
+     CLICK ON BACKGROUND CENTER PAGE / COVER TO FLIP
+     When in cover view (page 0), clicking or tapping on the
+     transparent cover or stage center page triggers the flipbook.
+  ------------------------------------------------------- */
+
+  function handleCoverClick(event) {
+    if (currentPage !== 0 || isFlipping) return;
+
+    if (event.target.closest('button, a, input, textarea, select, .jia-flipbook-toolbar')) {
+      return;
+    }
+
+    goNext();
+  }
+
+  let coverPointerStartX = 0;
+  let coverPointerStartY = 0;
+  let coverPointerStartTime = 0;
+
+  stage.addEventListener('pointerdown', (e) => {
+    if (currentPage !== 0 || isFlipping) return;
+    if (e.target.closest('button, a, input, textarea, select, .jia-flipbook-toolbar')) return;
+    coverPointerStartX = e.clientX;
+    coverPointerStartY = e.clientY;
+    coverPointerStartTime = Date.now();
+  });
+
+  stage.addEventListener('pointerup', (e) => {
+    if (currentPage !== 0 || isFlipping) return;
+    if (coverPointerStartTime === 0) return;
+    const dt = Date.now() - coverPointerStartTime;
+    coverPointerStartTime = 0;
+
+    const dx = Math.abs(e.clientX - coverPointerStartX);
+    const dy = Math.abs(e.clientY - coverPointerStartY);
+
+    // If it's a tap / click (not a drag or swipe across the screen)
+    if (dx < 25 && dy < 25 && dt < 600) {
+      if (e.target.closest('button, a, input, textarea, select, .jia-flipbook-toolbar')) return;
+      goNext();
+    }
+  });
+
+  stage.addEventListener('click', handleCoverClick);
+
+
+  /* -------------------------------------------------------
      BUTTON HOVER
   ------------------------------------------------------- */
 

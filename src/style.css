@@ -107,15 +107,7 @@
 
     box-sizing: border-box;
 
-    background:
-        radial-gradient(
-            ellipse at center,
-            #31469D 0%,
-            #242864 65%,
-            #1d2052 100%
-        );
-
-         background-image: url("./assets/images/flipbook-bg.png");
+    background: transparent !important;
 
     border-radius: 0;
 
@@ -146,6 +138,8 @@
     transform-style: preserve-3d;
 
     box-sizing: border-box;
+
+    transition: transform 0.4s ease;
 }
 
 
@@ -157,14 +151,53 @@
 .jia-cover-view .jia-flipbook-book {
     transform: translateX(-25%);
     box-shadow: none !important;
+    cursor: pointer;
+}
+
+.jia-cover-view .jia-flipbook-stage {
+    cursor: pointer;
 }
 
 .jia-cover-view .stf__outerShadow,
 .jia-cover-view .stf__innerShadow,
 .jia-cover-view .stf__hardShadow,
-.jia-cover-view .stf__hardInnerShadow,
+.jia-cover-view .stf__hardInnerShadow {
+    display: none !important;
+}
+
+/*
+ * Transparent cover page:
+ * The background image already displays the cover artwork in the center.
+ * The cover page (page index 0) is made transparent so the background center page
+ * shows through seamlessly, while remaining fully interactive for clicks/taps/swipes.
+ */
+.jia-fb-page-cover.jia-fb-page-first,
+.jia-fb-page-first,
+.jia-fb-page[data-page-index="0"],
+.jia-cover-view .jia-fb-page-first,
+.jia-cover-view .jia-fb-page[data-page-index="0"] {
+    background: transparent !important;
+    box-shadow: none !important;
+    cursor: pointer;
+}
+
+.jia-fb-page-cover.jia-fb-page-first img,
+.jia-fb-page-first img,
+.jia-fb-page[data-page-index="0"] img,
+.jia-cover-view .jia-fb-page-first img,
+.jia-cover-view .jia-fb-page[data-page-index="0"] img {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+.jia-fb-page-cover.jia-fb-page-first .jia-fb-shade,
+.jia-fb-page-first .jia-fb-shade,
+.jia-fb-page[data-page-index="0"] .jia-fb-shade,
+.jia-cover-view .jia-fb-page-first .jia-fb-shade,
 .jia-cover-view .jia-fb-page[data-page-index="0"] .jia-fb-shade {
     display: none !important;
+    opacity: 0 !important;
 }
 
 /* ---------------------------------------------------------
