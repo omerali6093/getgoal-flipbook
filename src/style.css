@@ -59,13 +59,20 @@
 
     align-items: center;
 
-    background:
+    /* background:
         radial-gradient(
             ellipse at center,
             #31469D 0%,
             #242864 65%,
             #1d2052 100%
-        );
+        ); */
+
+
+    background-image: url("../assets/images/flipbook-bg.png");
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+
 
     overflow: hidden;
 
@@ -107,6 +114,8 @@
             #242864 65%,
             #1d2052 100%
         );
+
+         background-image: url("./assets/images/flipbook-bg.png");
 
     border-radius: 0;
 

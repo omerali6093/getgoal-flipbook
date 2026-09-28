@@ -190,14 +190,14 @@ final class JIA_Flipbook_Plugin {
 				<div class="jia-flipbook-book"></div>
 			</div>
 
-			<div class="jia-flipbook-toolbar">
+			<!-- <div class="jia-flipbook-toolbar">
 				<button type="button" class="jia-fb-prev" aria-label="<?php esc_attr_e( 'Previous page', 'getgoal-flipbook' ); ?>">&#8249;</button>
 				<div class="jia-fb-page-indicator">
 					<span class="jia-fb-current">1</span> / <span class="jia-fb-total"><?php echo esc_html( $total_pages ); ?></span>
 				</div>
 				<button type="button" class="jia-fb-next" aria-label="<?php esc_attr_e( 'Next page', 'getgoal-flipbook' ); ?>">&#8250;</button>
 				<button type="button" class="jia-fb-fullscreen" aria-label="<?php esc_attr_e( 'Toggle fullscreen', 'getgoal-flipbook' ); ?>">&#9974;</button>
-			</div>
+			</div> -->
 
 			<div class="jia-flipbook-loader jia-fb-hint">
 				<div class="jia-fb-spinner"></div>
