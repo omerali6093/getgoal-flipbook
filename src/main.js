@@ -58,7 +58,14 @@ function buildPageNode(src, alt, index, total) {
 
   page.className = 'jia-fb-page';
   if (isFirst) {
-    page.classList.add('jia-fb-page-cover', 'jia-fb-page-first');
+    page.classList.add('jia-fb-page-cover', 'jia-fb-page-first', 'jia-fb-page-transparent');
+    page.setAttribute('data-density', 'soft');
+    page.setAttribute('data-page-index', '0');
+
+    const placeholder = document.createElement('div');
+    placeholder.className = 'jia-fb-cover-placeholder';
+    page.appendChild(placeholder);
+    return page;
   }
   if (isLast) {
     page.classList.add('jia-fb-page-cover', 'jia-fb-page-last');
@@ -175,6 +182,12 @@ function initFlipbook(root) {
     return;
   }
 
+  // Safety check: If images[0] is page-1 (meaning no cover was provided in array),
+  // insert an invisible cover placeholder at index 0 so page-1 and page-2 start on Spread 1!
+  if (/page-1\./i.test(images[0])) {
+    images.unshift('assets/images/cover-page.png');
+  }
+
   root.classList.add('jia-cover-view');
 
   /* -------------------------------------------------------
@@ -212,7 +225,8 @@ function initFlipbook(root) {
   const total = images.length;
 
   if (totalEl) {
-    totalEl.textContent = String(total);
+    // Total numbered content pages (excluding invisible cover)
+    totalEl.textContent = String(Math.max(1, total - 1));
   }
 
 
@@ -360,6 +374,78 @@ function initFlipbook(root) {
 
   let currentPage = 0;
 
+  let lastFlipTime = 0;
+
+
+  /* -------------------------------------------------------
+     FLIP CONTROLLER SAFETY GUARDS
+     - Prevent double-flips or interrupting an active flip animation
+     - Prevent flipping past the last spread (page-13 & page-14)
+  ------------------------------------------------------- */
+
+  try {
+    const flipController =
+      pageFlip.getFlipController?.() || pageFlip.flipController;
+
+    if (flipController) {
+      if (typeof flipController.flip === 'function') {
+        const origFlip = flipController.flip.bind(flipController);
+        flipController.flip = function (globalPos) {
+          // If a flip is in progress, do not interrupt or skip pages!
+          if (isFlipping || (flipController.getCalculation && flipController.getCalculation() !== null)) {
+            return;
+          }
+          isFlipping = true;
+          return origFlip(globalPos);
+        };
+      }
+
+      if (typeof flipController.flipNext === 'function') {
+        const origFlipNext = flipController.flipNext.bind(flipController);
+        flipController.flipNext = function (corner) {
+          if (isFlipping || (flipController.getCalculation && flipController.getCalculation() !== null)) {
+            return;
+          }
+          if (currentPage >= total - 2) {
+            return;
+          }
+          isFlipping = true;
+          return origFlipNext(corner);
+        };
+      }
+
+      if (typeof flipController.flipPrev === 'function') {
+        const origFlipPrev = flipController.flipPrev.bind(flipController);
+        flipController.flipPrev = function (corner) {
+          if (isFlipping || (flipController.getCalculation && flipController.getCalculation() !== null)) {
+            return;
+          }
+          if (currentPage <= 0) {
+            return;
+          }
+          isFlipping = true;
+          return origFlipPrev(corner);
+        };
+      }
+
+      if (typeof flipController.checkDirection === 'function') {
+        const origCheckDirection = flipController.checkDirection.bind(flipController);
+        flipController.checkDirection = function (direction) {
+          // 0 is FlipDirection.FORWARD
+          if (direction === 0) {
+            if (currentPage >= total - 2) {
+              return false;
+            }
+          }
+
+          return origCheckDirection(direction);
+        };
+      }
+    }
+  } catch (err) {
+    console.debug('JIA Flipbook: flipController override error:', err);
+  }
+
 
   /* -------------------------------------------------------
      UPDATE UI
@@ -373,7 +459,10 @@ function initFlipbook(root) {
     );
 
     if (currentEl) {
-      currentEl.textContent = String(currentPage + 1);
+      currentEl.textContent =
+        currentPage === 0
+          ? '1'
+          : `${currentPage}-${Math.min(currentPage + 1, total - 1)}`;
     }
 
     if (prevBtn) {
@@ -388,6 +477,12 @@ function initFlipbook(root) {
      */
     if (nextBtn) {
       nextBtn.disabled = currentPage >= total - 2;
+    }
+
+    if (currentPage >= total - 2) {
+      root.classList.add('jia-last-spread');
+    } else {
+      root.classList.remove('jia-last-spread');
     }
 
     preloadNearbyImages(images, currentPage);
@@ -408,10 +503,20 @@ function initFlipbook(root) {
         const page = v.closest('.jia-fb-page');
         if (!page) return;
         const idx = Number(page.getAttribute('data-page-index') || -1);
+
+        // When at cover (index 0), all videos stay paused and hidden
+        if (currentIndex === 0) {
+          try { v.pause(); } catch (e) {}
+          return;
+        }
+
         const shouldPlay = idx === currentIndex || idx === currentIndex + 1;
         if (shouldPlay) {
           // attempt to play; ignore promise rejections
-          try { v.play().catch(() => {}); } catch (e) {}
+          try {
+            const p = v.play();
+            if (p !== undefined) p.catch(() => {});
+          } catch (e) {}
         } else {
           try { v.pause(); } catch (e) {}
         }
@@ -438,7 +543,7 @@ function initFlipbook(root) {
     if (nextBtn) {
       nextBtn.disabled =
         isFlipping ||
-        currentPage >= total - 1;
+        currentPage >= total - 2;
     }
 
   }
@@ -473,6 +578,10 @@ function initFlipbook(root) {
 
       updateButtonState();
 
+      if (currentPage === 0) {
+        updateVideosVisibility(1);
+      }
+
     }
 
     if (state === 'read') {
@@ -484,6 +593,8 @@ function initFlipbook(root) {
       );
 
       updateButtonState();
+
+      updateVideosVisibility(currentPage);
     }
 
   });
@@ -669,14 +780,16 @@ function initFlipbook(root) {
   ------------------------------------------------------- */
 
   function goNext() {
+    const now = Date.now();
+    if (isFlipping || (now - lastFlipTime < 850)) return;
 
-    if (isFlipping) return;
-
-    /* Prevent the extra final flip when only one page remains */
+    /* Prevent the extra final flip when only one page remains / on final spread */
     if (currentPage >= total - 2) {
       return;
     }
 
+    isFlipping = true;
+    lastFlipTime = now;
     preloadNearbyImages(images, currentPage + 1);
 
     pageFlip.flipNext();
@@ -689,13 +802,15 @@ function initFlipbook(root) {
   ------------------------------------------------------- */
 
   function goPrevious() {
-
-    if (isFlipping) return;
+    const now = Date.now();
+    if (isFlipping || (now - lastFlipTime < 850)) return;
 
     if (currentPage <= 0) {
       return;
     }
 
+    isFlipping = true;
+    lastFlipTime = now;
     preloadNearbyImages(
       images,
       currentPage - 1
@@ -727,16 +842,6 @@ function initFlipbook(root) {
      transparent cover or stage center page triggers the flipbook.
   ------------------------------------------------------- */
 
-  function handleCoverClick(event) {
-    if (currentPage !== 0 || isFlipping) return;
-
-    if (event.target.closest('button, a, input, textarea, select, .jia-flipbook-toolbar')) {
-      return;
-    }
-
-    goNext();
-  }
-
   let coverPointerStartX = 0;
   let coverPointerStartY = 0;
   let coverPointerStartTime = 0;
@@ -761,11 +866,11 @@ function initFlipbook(root) {
     // If it's a tap / click (not a drag or swipe across the screen)
     if (dx < 25 && dy < 25 && dt < 600) {
       if (e.target.closest('button, a, input, textarea, select, .jia-flipbook-toolbar')) return;
+      // When clicking directly inside the book, PageFlip's internal click handler handles it
+      if (e.target.closest('.jia-flipbook-book')) return;
       goNext();
     }
   });
-
-  stage.addEventListener('click', handleCoverClick);
 
 
   /* -------------------------------------------------------

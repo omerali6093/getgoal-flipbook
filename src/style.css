@@ -179,15 +179,18 @@
 .jia-cover-view .jia-fb-page-first,
 .jia-cover-view .jia-fb-page[data-page-index="0"] {
     background: transparent !important;
+    background-color: transparent !important;
     box-shadow: none !important;
+    border: none !important;
+    outline: none !important;
     cursor: pointer;
 }
 
-.jia-fb-page-cover.jia-fb-page-first img,
-.jia-fb-page-first img,
-.jia-fb-page[data-page-index="0"] img,
-.jia-cover-view .jia-fb-page-first img,
-.jia-cover-view .jia-fb-page[data-page-index="0"] img {
+.jia-fb-page-cover.jia-fb-page-first *,
+.jia-fb-page-first *,
+.jia-fb-page[data-page-index="0"] *,
+.jia-cover-view .jia-fb-page-first *,
+.jia-cover-view .jia-fb-page[data-page-index="0"] * {
     opacity: 0 !important;
     visibility: hidden !important;
     pointer-events: none !important;
@@ -200,6 +203,38 @@
 .jia-cover-view .jia-fb-page[data-page-index="0"] .jia-fb-shade {
     display: none !important;
     opacity: 0 !important;
+}
+
+/*
+ * While at initial cover view:
+ * Prevent any videos from showing or playing in the background
+ */
+.jia-cover-view .jia-fb-page:not([data-page-index="0"]) {
+    opacity: 0 !important;
+    visibility: hidden !important;
+}
+
+.jia-cover-view video {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+}
+
+/*
+ * Final spread (page-13 and page-14):
+ * Remove forward flip interaction and peel shadows
+ */
+.jia-last-spread .stf__item.--right,
+.jia-last-spread .jia-fb-page[data-page-index="14"] {
+    cursor: default !important;
+    pointer-events: none !important;
+}
+
+.jia-last-spread .stf__outerShadow,
+.jia-last-spread .stf__innerShadow,
+.jia-last-spread .stf__hardShadow,
+.jia-last-spread .stf__hardInnerShadow {
+    display: none !important;
 }
 
 /* ---------------------------------------------------------

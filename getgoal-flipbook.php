@@ -131,6 +131,11 @@ final class JIA_Flipbook_Plugin {
 			$urls[] = $this->url( 'assets/images/' . basename( $file ) );
 		}
 
+		if ( empty( $cover ) ) {
+			$cover_url = $this->url( 'assets/images/cover-page.png' );
+			$urls = array_merge( array( $cover_url ), $urls );
+		}
+
 		return $urls;
 	}
 
