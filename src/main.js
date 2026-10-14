@@ -373,24 +373,53 @@ function initFlipbook(root) {
     );
 
     if (currentEl) {
-      currentEl.textContent =
-        String(currentPage + 1);
+      currentEl.textContent = String(currentPage + 1);
     }
 
     if (prevBtn) {
-      prevBtn.disabled =
-        currentPage <= 0;
+      prevBtn.disabled = currentPage <= 0;
     }
 
+    /*
+     * Disable the "next" control when we are at or past the
+     * penultimate page index so the final single-page "blank" flip
+     * does not occur. This prevents the extra last flip the user
+     * reported when arriving at the final spread (e.g. page-13/page-14).
+     */
     if (nextBtn) {
-      nextBtn.disabled =
-        currentPage >= total - 1;
+      nextBtn.disabled = currentPage >= total - 2;
     }
 
-    preloadNearbyImages(
-      images,
-      currentPage
-    );
+    preloadNearbyImages(images, currentPage);
+
+    /* Ensure video pages are only playing when visible */
+    updateVideosVisibility(currentPage);
+  }
+
+  /*
+   * Pause/play videos depending on which pages are currently visible.
+   * Keep videos paused while the cover (index 0) is showing so a
+   * covered page's media does not bleed through the transparent cover.
+   */
+  function updateVideosVisibility(currentIndex) {
+    try {
+      const allVideos = bookEl.querySelectorAll('video');
+      allVideos.forEach((v) => {
+        const page = v.closest('.jia-fb-page');
+        if (!page) return;
+        const idx = Number(page.getAttribute('data-page-index') || -1);
+        const shouldPlay = idx === currentIndex || idx === currentIndex + 1;
+        if (shouldPlay) {
+          // attempt to play; ignore promise rejections
+          try { v.play().catch(() => {}); } catch (e) {}
+        } else {
+          try { v.pause(); } catch (e) {}
+        }
+      });
+    } catch (e) {
+      // be forgiving on older browsers
+      console.debug('updateVideosVisibility error', e);
+    }
   }
 
 
@@ -643,14 +672,12 @@ function initFlipbook(root) {
 
     if (isFlipping) return;
 
-    if (currentPage >= total - 1) {
+    /* Prevent the extra final flip when only one page remains */
+    if (currentPage >= total - 2) {
       return;
     }
 
-    preloadNearbyImages(
-      images,
-      currentPage + 1
-    );
+    preloadNearbyImages(images, currentPage + 1);
 
     pageFlip.flipNext();
 
