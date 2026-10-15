@@ -3,22 +3,19 @@ import gsap from 'gsap';
 import './style.css';
 
 /**
- * JIA Flipbook
+ * GETGOAL Flipbook
  * StPageFlip + GSAP
  *
- * Fixes:
- * - Prevents duplicate/ghost page during next flip
- * - Makes previous flip smoother
- * - Removes GSAP filter animation that can interfere with page rendering
- * - Removes parent CSS filter/drop-shadow compositing problems
- * - Prevents multiple flips from starting at the same time
- * - Preloads nearby pages
- * - Keeps soft paper/page behavior
+ * Features:
+ * - Proper Cover Page: Displays cover-page.png as a real interactive book cover
+ * - Smooth Opening: Centered closed cover; opens into 2-page spreads (pages 1-2, 3-4, etc.)
+ * - Stutter-Free: Hard density eliminates heavy DOM cloning of MP4 video pages
+ * - Safe Flipping: No stuck states, debounced transitions with safety timeouts
+ * - Responsive: Works beautifully on desktop, tablet, and mobile devices
  */
 
-const ASPECT_RATIO = 1080 / 1920; // 9:16 portrait (1080 x 1920 Full HD)
-const FLIP_TIME = 800;
-const PRELOAD_DISTANCE = 3;
+const ASPECT_RATIO = 1080 / 1920; // 9:16 portrait
+const PRELOAD_DISTANCE = 2;
 
 function parseAspectRatio(val, fallback = ASPECT_RATIO) {
   if (!val) return fallback;
@@ -40,9 +37,8 @@ function parseAspectRatio(val, fallback = ASPECT_RATIO) {
   return !isNaN(num) && num > 0 ? num : fallback;
 }
 
-
 /* ---------------------------------------------------------
-   CREATE PAGE
+   CREATE PAGE NODE
 --------------------------------------------------------- */
 
 const VIDEO_EXTENSIONS = /\.(mp4|webm|ogg|mov)(\?.*)?$/i;
@@ -58,19 +54,19 @@ function buildPageNode(src, alt, index, total) {
 
   page.className = 'jia-fb-page';
   if (isFirst) {
-    page.classList.add('jia-fb-page-cover', 'jia-fb-page-first', 'jia-fb-page-transparent');
-    page.setAttribute('data-density', 'soft');
-    page.setAttribute('data-page-index', '0');
-
-    const placeholder = document.createElement('div');
-    placeholder.className = 'jia-fb-cover-placeholder';
-    page.appendChild(placeholder);
-    return page;
+    page.classList.add('jia-fb-page-cover', 'jia-fb-page-first');
   }
   if (isLast) {
     page.classList.add('jia-fb-page-cover', 'jia-fb-page-last');
   }
-  page.setAttribute('data-density', 'soft');
+
+  // Hard density ensures hardware-accelerated 3D CSS rotation
+  // and avoids DOM cloneNode duplication on video pages.
+  // page.setAttribute('data-density', 'hard');
+  page.setAttribute(
+    'data-density',
+    isFirst || isLast ? 'hard' : 'soft'
+  );
   page.setAttribute('data-page-index', String(index));
 
   let media;
@@ -78,63 +74,46 @@ function buildPageNode(src, alt, index, total) {
   if (isVideoSrc(src)) {
     page.classList.add('jia-fb-page-video');
 
-    /*
-     * Video page — autoplay, muted, loop so it
-     * behaves like animated content inside the book.
-     */
     media = document.createElement('video');
     media.src = src;
     media.autoplay = true;
     media.muted = true;
     media.loop = true;
     media.playsInline = true;
-    media.preload = 'auto';
+    media.preload = index <= 2 ? 'auto' : 'metadata';
     media.draggable = false;
-
     media.setAttribute('playsinline', '');
     media.setAttribute('webkit-playsinline', '');
-
+    media.setAttribute('muted', '');
   } else {
-
-    /*
-     * Image page (default).
-     */
     media = document.createElement('img');
     media.src = src;
-    media.alt = alt || `Page ${index + 1}`;
-
-    /*
-     * We don't lazy-load flipbook pages.
-     *
-     * Lazy loading can cause a page to appear late while
-     * the 3D animation is already running.
-     */
+    media.alt = alt || (isFirst ? 'GetGoal Book Cover' : `Page ${index + 1}`);
     media.loading = 'eager';
     media.decoding = 'async';
     media.draggable = false;
-
   }
 
   const shade = document.createElement('div');
   shade.className = 'jia-fb-shade';
 
+  // Light-sweep overlay for realistic page-turning reflection effect
+  const flipLight = document.createElement('div');
+  flipLight.className = 'jia-fb-flip-light';
+
   page.appendChild(media);
   page.appendChild(shade);
+  page.appendChild(flipLight);
 
   return page;
 }
-
 
 /* ---------------------------------------------------------
    PRELOAD IMAGES
 --------------------------------------------------------- */
 
 function preloadImage(src) {
-  if (!src) return;
-
-  /* Videos handle their own buffering via preload="auto" */
-  if (isVideoSrc(src)) return;
-
+  if (!src || isVideoSrc(src)) return;
   const img = new Image();
   img.decoding = 'async';
   img.src = src;
@@ -142,16 +121,11 @@ function preloadImage(src) {
 
 function preloadNearbyImages(images, currentIndex) {
   const start = Math.max(0, currentIndex - PRELOAD_DISTANCE);
-  const end = Math.min(
-    images.length - 1,
-    currentIndex + PRELOAD_DISTANCE
-  );
-
+  const end = Math.min(images.length - 1, currentIndex + PRELOAD_DISTANCE);
   for (let i = start; i <= end; i++) {
     preloadImage(images[i]);
   }
 }
-
 
 /* ---------------------------------------------------------
    INIT ONE FLIPBOOK
@@ -159,31 +133,23 @@ function preloadNearbyImages(images, currentIndex) {
 
 function initFlipbook(root) {
   if (!root || root.dataset.jiaInit === '1') return;
-
   root.dataset.jiaInit = '1';
 
   let images = [];
 
   try {
-    images = JSON.parse(
-      root.getAttribute('data-images') || '[]'
-    );
+    images = JSON.parse(root.getAttribute('data-images') || '[]');
   } catch (error) {
-    console.error(
-      'JIA Flipbook: could not parse image list',
-      error
-    );
-
+    console.error('GETGOAL Flipbook: could not parse image list', error);
     return;
   }
 
   if (!images.length) {
-    console.warn('JIA Flipbook: no images found.');
+    console.warn('GETGOAL Flipbook: no images found.');
     return;
   }
 
-  // Safety check: If images[0] is page-1 (meaning no cover was provided in array),
-  // insert an invisible cover placeholder at index 0 so page-1 and page-2 start on Spread 1!
+  // If first item is not cover-page, ensure cover-page is at index 0
   if (/page-1\./i.test(images[0])) {
     images.unshift('assets/images/cover-page.png');
   }
@@ -205,18 +171,12 @@ function initFlipbook(root) {
   const nextBtn = root.querySelector('.jia-fb-next');
   const fsBtn = root.querySelector('.jia-fb-fullscreen');
 
-  const soundHintTargets =
-    root.querySelectorAll('.jia-fb-hint');
-
+  const soundHintTargets = root.querySelectorAll('.jia-fb-hint');
 
   if (!stage || !bookEl) {
-    console.warn(
-      'JIA Flipbook: required elements are missing.'
-    );
-
+    console.warn('GETGOAL Flipbook: required elements are missing.');
     return;
   }
-
 
   /* -------------------------------------------------------
      BASIC DATA
@@ -225,33 +185,27 @@ function initFlipbook(root) {
   const total = images.length;
 
   if (totalEl) {
-    // Total numbered content pages (excluding invisible cover)
+    // Total numbered content pages (excluding cover)
     totalEl.textContent = String(Math.max(1, total - 1));
   }
-
 
   /* -------------------------------------------------------
      BUILD ALL PAGES
   ------------------------------------------------------- */
 
+  bookEl.innerHTML = '';
   images.forEach((src, index) => {
     bookEl.appendChild(
       buildPageNode(
         src,
-        `JIA Guide page ${index + 1}`,
+        index === 0 ? 'GetGoal Solutions - Book Cover' : `Page ${index}`,
         index,
         images.length
       )
     );
   });
 
-
-  /* -------------------------------------------------------
-     PRELOAD FIRST FEW PAGES
-  ------------------------------------------------------- */
-
   preloadNearbyImages(images, 0);
-
 
   /* -------------------------------------------------------
      CALCULATE INITIAL SIZE
@@ -262,219 +216,148 @@ function initFlipbook(root) {
     root.getAttribute('data-ratio');
   const aspectRatio = parseAspectRatio(aspectAttr, ASPECT_RATIO);
 
-  const containerWidth =
-    stage.clientWidth || 1100;
-
-  const baseWidth = Math.round(
-    Math.min(
-      containerWidth / 2,
-      750
-    )
-  );
-
-  const baseHeight = Math.round(
-    baseWidth / aspectRatio
-  );
-
+  const containerWidth = stage.clientWidth || 1100;
+  const baseWidth = Math.round(Math.min(containerWidth / 2, 700));
+  const baseHeight = Math.round(baseWidth / aspectRatio);
 
   /* -------------------------------------------------------
      CREATE PAGEFLIP
   ------------------------------------------------------- */
 
-
   const pageFlip = new PageFlip(bookEl, {
-  width: baseWidth,
-  height: baseHeight,
-
-  size: 'stretch',
-
-  minWidth: 200,
-  maxWidth: 1500,
-
-  minHeight: 300,
-  maxHeight: 2500,
-
-  flippingTime: 800,
-
-  /*
-   * IMPORTANT
-   */
-  usePortrait: false,
-
-  autoSize: true,
-
-  drawShadow: true,
-  maxShadowOpacity: 0.55,
-
-  showCover: true,
-
-  mobileScrollSupport: true,
-  useMouseEvents: true,
-
-  swipeDistance: 30,
-
-  clickEventForward: true,
-
-  disableFlipByClick: false,
-
-  showPageCorners: true,
-
-  startPage: 0
-});
-
- 
-
+    width: baseWidth,
+    height: baseHeight,
+    size: 'stretch',
+    minWidth: 160,
+    maxWidth: 1400,
+    minHeight: 250,
+    maxHeight: 2200,
+    flippingTime: 1250,
+    drawShadow: true,
+    maxShadowOpacity: 0.9,
+    usePortrait: false, // Maintain 2-page landscape spreads
+    autoSize: true,
+    drawShadow: true,
+    maxShadowOpacity: 0.65,
+    showCover: true, // First page (index 0) is closed front cover
+    mobileScrollSupport: true,
+    useMouseEvents: true,
+    swipeDistance: 25,
+    clickEventForward: true,
+    disableFlipByClick: false,
+    showPageCorners: true,
+    startPage: 0,
+  });
 
   /* -------------------------------------------------------
      LOAD HTML PAGES
   ------------------------------------------------------- */
 
-  pageFlip.loadFromHTML(
-    bookEl.querySelectorAll('.jia-fb-page')
-  );
+  pageFlip.loadFromHTML(bookEl.querySelectorAll('.jia-fb-page'));
 
-
-  /* -------------------------------------------------------
-     FORCE SOFT DENSITY
-  ------------------------------------------------------- */
 
   try {
+    const pages = pageFlip.getPageCollection()?.getPages() || [];
 
-    const pages =
-      pageFlip
-        .getPageCollection()
-        ?.getPages() || [];
-
-    pages.forEach((page) => {
-
-      if (
-        page &&
-        typeof page.setDensity === 'function'
-      ) {
-        page.setDensity('soft');
+    pages.forEach((page, index) => {
+      if (page && typeof page.setDensity === 'function') {
+        const isCover = index === 0 || index === total - 1;
+        page.setDensity(isCover ? 'hard' : 'soft');
       }
-
     });
-
   } catch (error) {
-
-    console.debug(
-      'JIA Flipbook: soft density configuration:',
-      error
-    );
-
+    console.debug('GETGOAL Flipbook: page density configuration error:', error);
   }
 
+  // Ensure all pages use hard density for smooth 3D GPU flipping
+  // try {
+  //   const pages = pageFlip.getPageCollection()?.getPages() || [];
+  //   pages.forEach((page) => {
+  //     if (page && typeof page.setDensity === 'function') {
+  //       page.setDensity('hard');
+  //     }
+  //   });
+  // } catch (error) {
+  //   console.debug('GETGOAL Flipbook: hard density configuration error:', error);
+  // }
 
   /* -------------------------------------------------------
-     STATE
+     STATE & TIMING
   ------------------------------------------------------- */
 
   let isFlipping = false;
-
   let currentPage = 0;
-
   let lastFlipTime = 0;
+  let flipSafetyTimer = null;
 
+  function clearSafetyTimer() {
+    if (flipSafetyTimer) {
+      clearTimeout(flipSafetyTimer);
+      flipSafetyTimer = null;
+    }
+  }
+
+  function setFlippingState(flipping) {
+    isFlipping = flipping;
+    clearSafetyTimer();
+
+    if (flipping) {
+      root.classList.add('jia-is-flipping');
+      // Safety release timeout ensures the flipbook NEVER stays stuck
+      flipSafetyTimer = setTimeout(() => {
+        isFlipping = false;
+        root.classList.remove('jia-is-flipping');
+        updateButtonState();
+      }, 1100);
+    } else {
+      root.classList.remove('jia-is-flipping');
+    }
+    updateButtonState();
+  }
 
   /* -------------------------------------------------------
-     FLIP CONTROLLER SAFETY GUARDS
-     - Prevent double-flips or interrupting an active flip animation
-     - Prevent flipping past the last spread (page-13 & page-14)
+     SAFETY GUARD: PREVENT FLIPPING PAST LAST SPREAD
   ------------------------------------------------------- */
 
   try {
     const flipController =
       pageFlip.getFlipController?.() || pageFlip.flipController;
 
-    if (flipController) {
-      if (typeof flipController.flip === 'function') {
-        const origFlip = flipController.flip.bind(flipController);
-        flipController.flip = function (globalPos) {
-          // If a flip is in progress, do not interrupt or skip pages!
-          if (isFlipping || (flipController.getCalculation && flipController.getCalculation() !== null)) {
-            return;
-          }
-          isFlipping = true;
-          return origFlip(globalPos);
-        };
-      }
-
-      if (typeof flipController.flipNext === 'function') {
-        const origFlipNext = flipController.flipNext.bind(flipController);
-        flipController.flipNext = function (corner) {
-          if (isFlipping || (flipController.getCalculation && flipController.getCalculation() !== null)) {
-            return;
-          }
-          if (currentPage >= total - 2) {
-            return;
-          }
-          isFlipping = true;
-          return origFlipNext(corner);
-        };
-      }
-
-      if (typeof flipController.flipPrev === 'function') {
-        const origFlipPrev = flipController.flipPrev.bind(flipController);
-        flipController.flipPrev = function (corner) {
-          if (isFlipping || (flipController.getCalculation && flipController.getCalculation() !== null)) {
-            return;
-          }
-          if (currentPage <= 0) {
-            return;
-          }
-          isFlipping = true;
-          return origFlipPrev(corner);
-        };
-      }
-
-      if (typeof flipController.checkDirection === 'function') {
-        const origCheckDirection = flipController.checkDirection.bind(flipController);
-        flipController.checkDirection = function (direction) {
-          // 0 is FlipDirection.FORWARD
-          if (direction === 0) {
-            if (currentPage >= total - 2) {
-              return false;
-            }
-          }
-
-          return origCheckDirection(direction);
-        };
-      }
+    if (flipController && typeof flipController.checkDirection === 'function') {
+      const origCheckDirection = flipController.checkDirection.bind(flipController);
+      flipController.checkDirection = function (direction) {
+        // 0 is FlipDirection.FORWARD
+        if (direction === 0 && currentPage >= total - 2) {
+          return false;
+        }
+        return origCheckDirection(direction);
+      };
     }
   } catch (err) {
-    console.debug('JIA Flipbook: flipController override error:', err);
+    console.debug('GETGOAL Flipbook: checkDirection guard error:', err);
   }
 
-
   /* -------------------------------------------------------
-     UPDATE UI
+     UPDATE UI & INDICATORS
   ------------------------------------------------------- */
 
   function updateIndicator(pageIndex) {
-
-    currentPage = Math.max(
-      0,
-      Math.min(pageIndex, total - 1)
-    );
+    currentPage = Math.max(0, Math.min(pageIndex, total - 1));
 
     if (currentEl) {
-      currentEl.textContent =
-        currentPage === 0
-          ? '1'
-          : `${currentPage}-${Math.min(currentPage + 1, total - 1)}`;
+      if (currentPage === 0) {
+        currentEl.textContent = 'Cover';
+      } else {
+        const leftPage = currentPage;
+        const rightPage = Math.min(currentPage + 1, total - 1);
+        currentEl.textContent = `${leftPage}-${rightPage}`;
+      }
     }
 
     if (prevBtn) {
       prevBtn.disabled = currentPage <= 0;
     }
 
-    /*
-     * Disable the "next" control when we are at or past the
-     * penultimate page index so the final single-page "blank" flip
-     * does not occur. This prevents the extra last flip the user
-     * reported when arriving at the final spread (e.g. page-13/page-14).
-     */
     if (nextBtn) {
       nextBtn.disabled = currentPage >= total - 2;
     }
@@ -486,16 +369,15 @@ function initFlipbook(root) {
     }
 
     preloadNearbyImages(images, currentPage);
-
-    /* Ensure video pages are only playing when visible */
     updateVideosVisibility(currentPage);
   }
 
-  /*
-   * Pause/play videos depending on which pages are currently visible.
-   * Keep videos paused while the cover (index 0) is showing so a
-   * covered page's media does not bleed through the transparent cover.
-   */
+  /* -------------------------------------------------------
+     VIDEO PLAYBACK MANAGEMENT
+     Only plays videos on currently visible pages to ensure
+     60fps performance and zero lag on mobile and desktop.
+  ------------------------------------------------------- */
+
   function updateVideosVisibility(currentIndex) {
     try {
       const allVideos = bookEl.querySelectorAll('video');
@@ -504,683 +386,388 @@ function initFlipbook(root) {
         if (!page) return;
         const idx = Number(page.getAttribute('data-page-index') || -1);
 
-        // When at cover (index 0), all videos stay paused and hidden
+        // When at cover (index 0), pause all video elements
         if (currentIndex === 0) {
-          try { v.pause(); } catch (e) {}
+          try { v.pause(); } catch (e) { }
           return;
         }
 
+        // On active spread, play the left and right pages
         const shouldPlay = idx === currentIndex || idx === currentIndex + 1;
         if (shouldPlay) {
-          // attempt to play; ignore promise rejections
           try {
-            const p = v.play();
-            if (p !== undefined) p.catch(() => {});
-          } catch (e) {}
+            if (v.paused) {
+              const p = v.play();
+              if (p !== undefined) p.catch(() => { });
+            }
+          } catch (e) { }
         } else {
-          try { v.pause(); } catch (e) {}
+          try {
+            if (!v.paused) v.pause();
+          } catch (e) { }
         }
       });
     } catch (e) {
-      // be forgiving on older browsers
-      console.debug('updateVideosVisibility error', e);
+      console.debug('updateVideosVisibility error:', e);
     }
   }
-
 
   /* -------------------------------------------------------
      BUTTON STATE
   ------------------------------------------------------- */
 
   function updateButtonState() {
-
     if (prevBtn) {
-      prevBtn.disabled =
-        isFlipping ||
-        currentPage <= 0;
+      prevBtn.disabled = isFlipping || currentPage <= 0;
     }
-
     if (nextBtn) {
-      nextBtn.disabled =
-        isFlipping ||
-        currentPage >= total - 2;
+      nextBtn.disabled = isFlipping || currentPage >= total - 2;
     }
-
   }
 
-
   /* -------------------------------------------------------
-     FLIP STATE
+     FLIP STATE LISTENERS
   ------------------------------------------------------- */
 
-  pageFlip.on('changeState', (event) => {
+  /**
+   * FLIP LIGHT SWEEP EFFECT
+   * Animates visible .jia-fb-flip-light overlays during a flip
+   * to simulate realistic light glancing off paper.
+   */
+  function triggerFlipLightEffect() {
+    const lights = bookEl.querySelectorAll('.jia-fb-flip-light');
+    const stageRect = stage.getBoundingClientRect();
 
-    const state = event.data;
+    lights.forEach((el) => {
+      const page = el.closest('.stf__item') || el.closest('.jia-fb-page');
+      if (!page) return;
 
-    /*
-     * StPageFlip exposes:
-     *
-     * user_fold
-     * fold_corner
-     * flipping
-     * read
-     */
+      const rect = page.getBoundingClientRect();
+      const isVisible =
+        rect.right > stageRect.left &&
+        rect.left < stageRect.right &&
+        rect.bottom > stageRect.top &&
+        rect.top < stageRect.bottom;
 
-    if (state === 'flipping') {
+      gsap.killTweensOf(el);
 
-      isFlipping = true;
-
-      root.classList.remove('jia-cover-view');
-
-      root.classList.add(
-        'jia-is-flipping'
-      );
-
-      updateButtonState();
-
-      if (currentPage === 0) {
-        updateVideosVisibility(1);
+      if (!isVisible) {
+        gsap.set(el, { opacity: 0 });
+        return;
       }
 
+      gsap.fromTo(
+        el,
+        {
+          opacity: 0,
+          xPercent: -65,
+          scaleX: 0.88,
+        },
+        {
+          opacity: 1,
+          xPercent: 65,
+          scaleX: 1.08,
+          duration: 0.78,
+          ease: 'power2.inOut',
+          onComplete: () => {
+            gsap.to(el, {
+              opacity: 0,
+              duration: 0.3,
+              ease: 'power1.out',
+            });
+          },
+        }
+      );
+    });
+  }
+
+  function clearFlipLightEffect() {
+    const lights = bookEl.querySelectorAll('.jia-fb-flip-light');
+    lights.forEach((el) => {
+      gsap.killTweensOf(el);
+      gsap.to(el, { opacity: 0, duration: 0.2, ease: 'power1.out' });
+    });
+  }
+
+  pageFlip.on('changeState', (event) => {
+    const state = event.data;
+
+    if (state === 'flipping' || state === 'user_fold') {
+      if (currentPage === 0) {
+        root.classList.remove('jia-cover-view');
+        updateVideosVisibility(1);
+      }
+    }
+
+    if (state === 'flipping') {
+      setFlippingState(true);
+      triggerFlipLightEffect();
     }
 
     if (state === 'read') {
-
-      isFlipping = false;
-
-      root.classList.remove(
-        'jia-is-flipping'
-      );
-
-      updateButtonState();
-
+      setFlippingState(false);
       updateVideosVisibility(currentPage);
+      clearFlipLightEffect();
     }
-
   });
 
-
-  /* -------------------------------------------------------
-     PAGE CHANGED
-  ------------------------------------------------------- */
-
   pageFlip.on('flip', (event) => {
-
     const pageIndex = Number(event.data);
-
     updateIndicator(pageIndex);
 
-    /*
-     * COVER VIEW LOGIC
-     *
-     * Keep the original initial-cover behavior.
-     *
-     * When the user returns to page 1 using the
-     * Previous button, restore the same cover state.
-     *
-     * This removes the book shadow and restores the
-     * cover positioning only when page 1 is actually reached.
-     */
-
     if (pageIndex === 0) {
-
-        root.classList.add(
-            'jia-cover-view'
-        );
-
+      root.classList.add('jia-cover-view');
     } else {
-
-        root.classList.remove(
-            'jia-cover-view'
-        );
-
+      root.classList.remove('jia-cover-view');
     }
 
-    /*
-     * IMPORTANT:
-     *
-     * No GSAP filter/transform is applied here.
-     *
-     * PageFlip is already doing the 3D transformation.
-     * Adding another filter/transform at this point can
-     * create a temporary duplicate/compositing artifact.
-     */
-
-});
+    setFlippingState(false);
+    clearFlipLightEffect();
+  });
 
   /* -------------------------------------------------------
      INITIALIZATION
   ------------------------------------------------------- */
 
   pageFlip.on('init', () => {
-
     updateIndicator(0);
-
-    isFlipping = false;
-
-    updateButtonState();
-
-
-    /* Remove loader */
+    setFlippingState(false);
 
     if (loader) {
-
       gsap.to(loader, {
-
         opacity: 0,
-
         duration: 0.35,
-
         ease: 'power2.out',
-
         onComplete: () => {
-
-          if (loader) {
-            loader.remove();
-          }
-
-        }
-
+          if (loader) loader.remove();
+        },
       });
-
     }
 
-
-    /* -----------------------------------------------------
-       ENTRANCE ANIMATION
-    ----------------------------------------------------- */
-
+    // Gentle book entrance
     gsap.fromTo(
-
       bookEl,
-
-      {
-        opacity: 0,
-        y: 35,
-        scale: 0.97
-      },
-
+      { opacity: 0, y: 25, scale: 0.98 },
       {
         opacity: 1,
         y: 0,
         scale: 1,
-
         duration: 0.8,
-
         ease: 'power3.out',
-
-        clearProps: 'transform,opacity'
+        clearProps: 'opacity,y',
       }
-
     );
 
-
-    /* -----------------------------------------------------
-       CORNER HINT
-    ----------------------------------------------------- */
-
-    const cornerHint =
-      root.querySelector(
-        '.jia-fb-corner-hint'
-      );
-
-    if (soundHintTargets.length) {
-
-      gsap.fromTo(
-
-        soundHintTargets,
-
-        {
-          opacity: 0
-        },
-
-        {
-          opacity: 1,
-
-          duration: 0.5,
-
-          delay: 0.7,
-
-          ease: 'power2.out'
-        }
-
-      );
-
-    }
-
+    // Corner hint animation if present
+    const cornerHint = root.querySelector('.jia-fb-corner-hint');
     if (cornerHint) {
-
-      gsap.to(
-
-        cornerHint,
-
-        {
-          x: -12,
-
-          duration: 0.75,
-
-          delay: 1,
-
-          repeat: 3,
-
-          yoyo: true,
-
-          ease: 'power1.inOut'
-        }
-
-      );
-
+      gsap.to(cornerHint, {
+        x: -10,
+        duration: 0.75,
+        delay: 0.8,
+        repeat: 3,
+        yoyo: true,
+        ease: 'power1.inOut',
+      });
     }
-
   });
 
-
   /* -------------------------------------------------------
-     SAFE NEXT FLIP
+     PROGRAMMATIC FLIP CONTROLS
   ------------------------------------------------------- */
 
   function goNext() {
     const now = Date.now();
-    if (isFlipping || (now - lastFlipTime < 850)) return;
+    if (isFlipping || now - lastFlipTime < 700) return;
+    if (currentPage >= total - 2) return;
 
-    /* Prevent the extra final flip when only one page remains / on final spread */
-    if (currentPage >= total - 2) {
-      return;
+    lastFlipTime = now;
+    setFlippingState(true);
+
+    if (currentPage === 0) {
+      root.classList.remove('jia-cover-view');
     }
 
-    isFlipping = true;
-    lastFlipTime = now;
-    preloadNearbyImages(images, currentPage + 1);
-
+    preloadNearbyImages(images, currentPage + 2);
     pageFlip.flipNext();
-
   }
-
-
-  /* -------------------------------------------------------
-     SAFE PREVIOUS FLIP
-  ------------------------------------------------------- */
 
   function goPrevious() {
     const now = Date.now();
-    if (isFlipping || (now - lastFlipTime < 850)) return;
+    if (isFlipping || now - lastFlipTime < 700) return;
+    if (currentPage <= 0) return;
 
-    if (currentPage <= 0) {
+    lastFlipTime = now;
+    setFlippingState(true);
+
+    preloadNearbyImages(images, currentPage - 2);
+    pageFlip.flipPrev();
+  }
+
+  /* -------------------------------------------------------
+     CLICK TO FLIP COVER & BOOK
+     When on the cover (page 0), clicking anywhere on the book
+     instantly and smoothly opens the flipbook.
+  ------------------------------------------------------- */
+
+  bookEl.addEventListener('click', (e) => {
+    if (e.target.closest('button, a, input, select, textarea, .jia-flipbook-toolbar')) {
       return;
     }
 
-    isFlipping = true;
-    lastFlipTime = now;
-    preloadNearbyImages(
-      images,
-      currentPage - 1
-    );
-
-    pageFlip.flipPrev();
-
-  }
-
-
-  /* -------------------------------------------------------
-     BUTTON EVENTS
-  ------------------------------------------------------- */
-
-  prevBtn?.addEventListener(
-    'click',
-    goPrevious
-  );
-
-  nextBtn?.addEventListener(
-    'click',
-    goNext
-  );
-
-
-  /* -------------------------------------------------------
-     CLICK ON BACKGROUND CENTER PAGE / COVER TO FLIP
-     When in cover view (page 0), clicking or tapping on the
-     transparent cover or stage center page triggers the flipbook.
-  ------------------------------------------------------- */
-
-  let coverPointerStartX = 0;
-  let coverPointerStartY = 0;
-  let coverPointerStartTime = 0;
-
-  stage.addEventListener('pointerdown', (e) => {
-    if (currentPage !== 0 || isFlipping) return;
-    if (e.target.closest('button, a, input, textarea, select, .jia-flipbook-toolbar')) return;
-    coverPointerStartX = e.clientX;
-    coverPointerStartY = e.clientY;
-    coverPointerStartTime = Date.now();
-  });
-
-  stage.addEventListener('pointerup', (e) => {
-    if (currentPage !== 0 || isFlipping) return;
-    if (coverPointerStartTime === 0) return;
-    const dt = Date.now() - coverPointerStartTime;
-    coverPointerStartTime = 0;
-
-    const dx = Math.abs(e.clientX - coverPointerStartX);
-    const dy = Math.abs(e.clientY - coverPointerStartY);
-
-    // If it's a tap / click (not a drag or swipe across the screen)
-    if (dx < 25 && dy < 25 && dt < 600) {
-      if (e.target.closest('button, a, input, textarea, select, .jia-flipbook-toolbar')) return;
-      // When clicking directly inside the book, PageFlip's internal click handler handles it
-      if (e.target.closest('.jia-flipbook-book')) return;
+    if (currentPage === 0) {
+      e.stopPropagation();
       goNext();
     }
   });
 
-
   /* -------------------------------------------------------
-     BUTTON HOVER
+     MOBILE TOUCH INTERACTION FOR COVER
   ------------------------------------------------------- */
 
-  [prevBtn, nextBtn, fsBtn].forEach(
-    (button) => {
+  let coverTouchStartX = 0;
+  let coverTouchStartY = 0;
+  let coverTouchStartTime = 0;
 
-      if (!button) return;
-
-      button.addEventListener(
-        'mouseenter',
-        () => {
-
-          if (
-            button.disabled
-          ) {
-            return;
-          }
-
-          gsap.to(
-            button,
-            {
-              scale: 1.08,
-              duration: 0.18,
-              ease: 'power2.out'
-            }
-          );
-
-        }
-      );
-
-
-      button.addEventListener(
-        'mouseleave',
-        () => {
-
-          gsap.to(
-            button,
-            {
-              scale: 1,
-              duration: 0.18,
-              ease: 'power2.out'
-            }
-          );
-
-        }
-      );
-
-
-      button.addEventListener(
-        'click',
-        () => {
-
-          if (
-            button.disabled
-          ) {
-            return;
-          }
-
-          gsap.fromTo(
-
-            button,
-
-            {
-              scale: 0.92
-            },
-
-            {
-              scale: 1,
-              duration: 0.2,
-              ease: 'back.out(2)'
-            }
-
-          );
-
-        }
-      );
-
-    }
+  bookEl.addEventListener(
+    'touchstart',
+    (e) => {
+      if (currentPage !== 0) return;
+      const t = e.touches[0];
+      if (!t) return;
+      coverTouchStartX = t.clientX;
+      coverTouchStartY = t.clientY;
+      coverTouchStartTime = Date.now();
+    },
+    { passive: true }
   );
 
+  bookEl.addEventListener(
+    'touchend',
+    (e) => {
+      if (currentPage !== 0 || coverTouchStartTime === 0) return;
+      const dt = Date.now() - coverTouchStartTime;
+      coverTouchStartTime = 0;
+      const t = e.changedTouches[0];
+      if (!t) return;
+
+      const dx = Math.abs(t.clientX - coverTouchStartX);
+      const dy = Math.abs(t.clientY - coverTouchStartY);
+
+      // Quick tap or swipe left on the cover opens the book
+      if ((dx < 25 && dy < 25 && dt < 450) || (coverTouchStartX - t.clientX > 30)) {
+        goNext();
+      }
+    },
+    { passive: true }
+  );
+
+  /* -------------------------------------------------------
+     TOOLBAR BUTTON EVENTS
+  ------------------------------------------------------- */
+
+  prevBtn?.addEventListener('click', goPrevious);
+  nextBtn?.addEventListener('click', goNext);
+
+  [prevBtn, nextBtn, fsBtn].forEach((button) => {
+    if (!button) return;
+
+    button.addEventListener('mouseenter', () => {
+      if (button.disabled) return;
+      gsap.to(button, { scale: 1.08, duration: 0.18, ease: 'power2.out' });
+    });
+
+    button.addEventListener('mouseleave', () => {
+      gsap.to(button, { scale: 1, duration: 0.18, ease: 'power2.out' });
+    });
+
+    button.addEventListener('click', () => {
+      if (button.disabled) return;
+      gsap.fromTo(button, { scale: 0.92 }, { scale: 1, duration: 0.2, ease: 'back.out(2)' });
+    });
+  });
 
   /* -------------------------------------------------------
      FULLSCREEN
   ------------------------------------------------------- */
 
-  fsBtn?.addEventListener(
-    'click',
-    () => {
-
-      if (!document.fullscreenElement) {
-
-        if (root.requestFullscreen) {
-
-          root
-            .requestFullscreen()
-            .catch(() => {});
-
-        }
-
-        root.classList.add(
-          'is-fullscreen'
-        );
-
-      } else {
-
-        if (document.exitFullscreen) {
-
-          document
-            .exitFullscreen()
-            .catch(() => {});
-
-        }
-
-        root.classList.remove(
-          'is-fullscreen'
-        );
-
+  fsBtn?.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      if (root.requestFullscreen) {
+        root.requestFullscreen().catch(() => { });
       }
-
-    }
-  );
-
-
-  /* -------------------------------------------------------
-     FULLSCREEN CHANGE
-  ------------------------------------------------------- */
-
-  document.addEventListener(
-    'fullscreenchange',
-    () => {
-
-      if (
-        !document.fullscreenElement
-      ) {
-
-        root.classList.remove(
-          'is-fullscreen'
-        );
-
+      root.classList.add('is-fullscreen');
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => { });
       }
-
-
-      /*
-       * Give the browser a moment to update
-       * the fullscreen dimensions before
-       * asking PageFlip to recalculate.
-       */
-
-      setTimeout(() => {
-
-        if (
-          typeof pageFlip.update ===
-          'function'
-        ) {
-
-          pageFlip.update();
-
-        }
-
-      }, 100);
-
+      root.classList.remove('is-fullscreen');
     }
-  );
+  });
 
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) {
+      root.classList.remove('is-fullscreen');
+    }
+    setTimeout(() => {
+      if (typeof pageFlip.update === 'function') {
+        pageFlip.update();
+      }
+    }, 100);
+  });
 
   /* -------------------------------------------------------
      KEYBOARD NAVIGATION
   ------------------------------------------------------- */
 
-  root.setAttribute(
-    'tabindex',
-    '0'
-  );
-
-  root.addEventListener(
-    'keydown',
-    (event) => {
-
-      /*
-       * Don't interfere with form inputs.
-       */
-
-      const tag =
-        event.target?.tagName;
-
-      if (
-        tag === 'INPUT' ||
-        tag === 'TEXTAREA' ||
-        tag === 'SELECT'
-      ) {
-        return;
-      }
-
-
-      if (
-        event.key === 'ArrowRight'
-      ) {
-
-        event.preventDefault();
-
-        goNext();
-
-      }
-
-
-      if (
-        event.key === 'ArrowLeft'
-      ) {
-
-        event.preventDefault();
-
-        goPrevious();
-
-      }
-
+  root.setAttribute('tabindex', '0');
+  root.addEventListener('keydown', (event) => {
+    const tag = event.target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+      return;
     }
-  );
-
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      goNext();
+    }
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      goPrevious();
+    }
+  });
 
   /* -------------------------------------------------------
      RESPONSIVE RESIZE
   ------------------------------------------------------- */
 
   function handleResize() {
-
-    clearTimeout(
-      root._jiaResizeTimer
-    );
-
-    root._jiaResizeTimer =
-      setTimeout(() => {
-
-        if (
-          typeof pageFlip.update ===
-          'function'
-        ) {
-
-          pageFlip.update();
-
-        }
-
-        preloadNearbyImages(
-          images,
-          currentPage
-        );
-
-      }, 180);
-
+    clearTimeout(root._jiaResizeTimer);
+    root._jiaResizeTimer = setTimeout(() => {
+      if (typeof pageFlip.update === 'function') {
+        pageFlip.update();
+      }
+      preloadNearbyImages(images, currentPage);
+    }, 150);
   }
 
-
-  window.addEventListener(
-    'resize',
-    handleResize,
-    { passive: true }
-  );
-
-
-  /* -------------------------------------------------------
-     STORE INSTANCE
-  ------------------------------------------------------- */
+  window.addEventListener('resize', handleResize, { passive: true });
 
   root._jiaPageFlip = pageFlip;
-
 }
-
 
 /* ---------------------------------------------------------
    INIT ALL FLIPBOOKS
 --------------------------------------------------------- */
 
 function initAll() {
-
-  document
-    .querySelectorAll(
-      '.jia-flipbook-wrap'
-    )
-    .forEach(initFlipbook);
-
+  document.querySelectorAll('.jia-flipbook-wrap').forEach(initFlipbook);
 }
 
-
-/* ---------------------------------------------------------
-   DOM READY
---------------------------------------------------------- */
-
-if (
-  document.readyState ===
-  'loading'
-) {
-
-  document.addEventListener(
-    'DOMContentLoaded',
-    initAll
-  );
-
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initAll);
 } else {
-
   initAll();
-
 }
-
-
-/*
- * Allow Elementor/AJAX/etc. to manually
- * initialize newly inserted flipbooks.
- */
 
 window.JIAFlipbookInit = initAll;
 
@@ -1191,212 +778,726 @@ window.JIAFlipbookInit = initAll;
 
 
 
-
+// import { PageFlip } from 'page-flip';
 // import gsap from 'gsap';
 // import './style.css';
 
 // /**
-//  * JIA Flipbook — StPageFlip + GSAP powered 3D flipbook.
-//  * Every element carrying the class "jia-flipbook-wrap" on the page is
-//  * turned into an independent flipbook instance, so the [jia_flipbook]
-//  * shortcode can safely be used more than once on the same page.
+//  * GETGOAL Flipbook
+//  * StPageFlip + GSAP
+//  *
+//  * Features:
+//  * - Proper Cover Page: Displays cover-page.png as a real interactive book cover
+//  * - Smooth Opening: Centered closed cover; opens into 2-page spreads (pages 1-2, 3-4, etc.)
+//  * - Stutter-Free: Hard density eliminates heavy DOM cloning of MP4 video pages
+//  * - Safe Flipping: No stuck states, debounced transitions with safety timeouts
+//  * - Responsive: Works beautifully on desktop, tablet, and mobile devices
 //  */
 
-// const ASPECT_RATIO = 1241 / 1754; // matches the source page images (portrait A4-like)
+// const ASPECT_RATIO = 1080 / 1920; // 9:16 portrait
+// const PRELOAD_DISTANCE = 2;
+
+// function parseAspectRatio(val, fallback = ASPECT_RATIO) {
+//   if (!val) return fallback;
+//   if (typeof val === 'number') return val > 0 ? val : fallback;
+//   const str = String(val).trim();
+//   if (str.includes(':')) {
+//     const parts = str.split(':').map(Number);
+//     if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
+//       return parts[0] / parts[1];
+//     }
+//   }
+//   if (str.includes('/')) {
+//     const parts = str.split('/').map(Number);
+//     if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
+//       return parts[0] / parts[1];
+//     }
+//   }
+//   const num = parseFloat(str);
+//   return !isNaN(num) && num > 0 ? num : fallback;
+// }
+
+// /* ---------------------------------------------------------
+//    CREATE PAGE NODE
+// --------------------------------------------------------- */
+
+// const VIDEO_EXTENSIONS = /\.(mp4|webm|ogg|mov)(\?.*)?$/i;
+
+// function isVideoSrc(src) {
+//   return VIDEO_EXTENSIONS.test(src);
+// }
 
 // function buildPageNode(src, alt, index, total) {
 //   const page = document.createElement('div');
-//   page.className = 'jia-fb-page';
-//   page.setAttribute('data-density', 'soft');
+//   const isFirst = index === 0;
+//   const isLast = typeof total === 'number' && index === total - 1;
 
-//   const img = document.createElement('img');
-//   img.src = src;
-//   img.alt = alt || `Page ${index + 1}`;
-//   img.loading = index < 2 ? 'eager' : 'lazy';
-//   img.draggable = false;
+//   page.className = 'jia-fb-page';
+//   if (isFirst) {
+//     page.classList.add('jia-fb-page-cover', 'jia-fb-page-first');
+//   }
+//   if (isLast) {
+//     page.classList.add('jia-fb-page-cover', 'jia-fb-page-last');
+//   }
+
+//   // Hard density ensures hardware-accelerated 3D CSS rotation
+//   // and avoids DOM cloneNode duplication on video pages.
+//   page.setAttribute('data-density', 'hard');
+//   page.setAttribute('data-page-index', String(index));
+
+//   let media;
+
+//   if (isVideoSrc(src)) {
+//     page.classList.add('jia-fb-page-video');
+
+//     media = document.createElement('video');
+//     media.src = src;
+//     media.autoplay = true;
+//     media.muted = true;
+//     media.loop = true;
+//     media.playsInline = true;
+//     media.preload = index <= 2 ? 'auto' : 'metadata';
+//     media.draggable = false;
+//     media.setAttribute('playsinline', '');
+//     media.setAttribute('webkit-playsinline', '');
+//     media.setAttribute('muted', '');
+//   } else {
+//     media = document.createElement('img');
+//     media.src = src;
+//     media.alt = alt || (isFirst ? 'GetGoal Book Cover' : `Page ${index + 1}`);
+//     media.loading = 'eager';
+//     media.decoding = 'async';
+//     media.draggable = false;
+//   }
 
 //   const shade = document.createElement('div');
 //   shade.className = 'jia-fb-shade';
 
-//   page.appendChild(img);
+//   // Light-sweep overlay for realistic page-turning reflection effect
+//   const flipLight = document.createElement('div');
+//   flipLight.className = 'jia-fb-flip-light';
+
+//   page.appendChild(media);
 //   page.appendChild(shade);
+//   page.appendChild(flipLight);
+
 //   return page;
 // }
+
+// /* ---------------------------------------------------------
+//    PRELOAD IMAGES
+// --------------------------------------------------------- */
+
+// function preloadImage(src) {
+//   if (!src || isVideoSrc(src)) return;
+//   const img = new Image();
+//   img.decoding = 'async';
+//   img.src = src;
+// }
+
+// function preloadNearbyImages(images, currentIndex) {
+//   const start = Math.max(0, currentIndex - PRELOAD_DISTANCE);
+//   const end = Math.min(images.length - 1, currentIndex + PRELOAD_DISTANCE);
+//   for (let i = start; i <= end; i++) {
+//     preloadImage(images[i]);
+//   }
+// }
+
+// /* ---------------------------------------------------------
+//    INIT ONE FLIPBOOK
+// --------------------------------------------------------- */
 
 // function initFlipbook(root) {
 //   if (!root || root.dataset.jiaInit === '1') return;
 //   root.dataset.jiaInit = '1';
 
 //   let images = [];
+
 //   try {
 //     images = JSON.parse(root.getAttribute('data-images') || '[]');
-//   } catch (e) {
-//     console.error('JIA Flipbook: could not parse image list', e);
+//   } catch (error) {
+//     console.error('GETGOAL Flipbook: could not parse image list', error);
 //     return;
 //   }
-//   if (!images.length) return;
+
+//   if (!images.length) {
+//     console.warn('GETGOAL Flipbook: no images found.');
+//     return;
+//   }
+
+//   // If first item is not cover-page, ensure cover-page is at index 0
+//   if (/page-1\./i.test(images[0])) {
+//     images.unshift('assets/images/cover-page.png');
+//   }
+
+//   root.classList.add('jia-cover-view');
+
+//   /* -------------------------------------------------------
+//      ELEMENTS
+//   ------------------------------------------------------- */
 
 //   const stage = root.querySelector('.jia-flipbook-stage');
 //   const bookEl = root.querySelector('.jia-flipbook-book');
 //   const loader = root.querySelector('.jia-flipbook-loader');
+
 //   const currentEl = root.querySelector('.jia-fb-current');
 //   const totalEl = root.querySelector('.jia-fb-total');
+
 //   const prevBtn = root.querySelector('.jia-fb-prev');
 //   const nextBtn = root.querySelector('.jia-fb-next');
 //   const fsBtn = root.querySelector('.jia-fb-fullscreen');
+
 //   const soundHintTargets = root.querySelectorAll('.jia-fb-hint');
 
-//   const total = images.length;
-//   if (totalEl) totalEl.textContent = String(total);
+//   if (!stage || !bookEl) {
+//     console.warn('GETGOAL Flipbook: required elements are missing.');
+//     return;
+//   }
 
-//   // Build page DOM nodes up front with soft flexible paper density.
-//   images.forEach((src, i) => {
-//     bookEl.appendChild(buildPageNode(src, `JIA Guide page ${i + 1}`, i, total));
+//   /* -------------------------------------------------------
+//      BASIC DATA
+//   ------------------------------------------------------- */
+
+//   const total = images.length;
+
+//   if (totalEl) {
+//     // Total numbered content pages (excluding cover)
+//     totalEl.textContent = String(Math.max(1, total - 1));
+//   }
+
+//   /* -------------------------------------------------------
+//      BUILD ALL PAGES
+//   ------------------------------------------------------- */
+
+//   bookEl.innerHTML = '';
+//   images.forEach((src, index) => {
+//     bookEl.appendChild(
+//       buildPageNode(
+//         src,
+//         index === 0 ? 'GetGoal Solutions - Book Cover' : `Page ${index}`,
+//         index,
+//         images.length
+//       )
+//     );
 //   });
 
-//   // Compute a sensible starting size from the container while keeping
-//   // the true page aspect ratio; StPageFlip will keep it responsive.
-//   const containerWidth = stage.clientWidth || 900;
-//   const baseWidth = Math.min(containerWidth / 2, 620); // single-page width (book shows 2 pages)
-//   const baseHeight = Math.round(baseWidth / ASPECT_RATIO);
+//   preloadNearbyImages(images, 0);
+
+//   /* -------------------------------------------------------
+//      CALCULATE INITIAL SIZE
+//   ------------------------------------------------------- */
+
+//   const aspectAttr =
+//     root.getAttribute('data-aspect-ratio') ||
+//     root.getAttribute('data-ratio');
+//   const aspectRatio = parseAspectRatio(aspectAttr, ASPECT_RATIO);
+
+//   const containerWidth = stage.clientWidth || 1100;
+//   const baseWidth = Math.round(Math.min(containerWidth / 2, 700));
+//   const baseHeight = Math.round(baseWidth / aspectRatio);
+
+//   /* -------------------------------------------------------
+//      CREATE PAGEFLIP
+//   ------------------------------------------------------- */
 
 //   const pageFlip = new PageFlip(bookEl, {
 //     width: baseWidth,
 //     height: baseHeight,
 //     size: 'stretch',
-//     minWidth: 220,
-//     maxWidth: 1000,
-//     minHeight: 300,
-//     maxHeight: 1400,
-//     maxShadowOpacity: 0.7,
-//     showCover: true,
-//     mobileScrollSupport: true,
-//     useMouseEvents: true,
-//     flippingTime: 950,
-//     usePortrait: true,
+//     minWidth: 160,
+//     maxWidth: 1400,
+//     minHeight: 250,
+//     maxHeight: 2200,
+//     flippingTime: 700,
+//     usePortrait: false, // Maintain 2-page landscape spreads
 //     autoSize: true,
 //     drawShadow: true,
-//     showPageCorners: true,
-//     swipeDistance: 30,
+//     maxShadowOpacity: 0.5,
+//     showCover: true, // First page (index 0) is closed front cover
+//     mobileScrollSupport: true,
+//     useMouseEvents: true,
+//     swipeDistance: 25,
 //     clickEventForward: true,
 //     disableFlipByClick: false,
+//     showPageCorners: true,
+//     startPage: 0,
 //   });
+
+//   /* -------------------------------------------------------
+//      LOAD HTML PAGES
+//   ------------------------------------------------------- */
 
 //   pageFlip.loadFromHTML(bookEl.querySelectorAll('.jia-fb-page'));
 
-//   // Ensure all pages (including covers) use soft density for smooth corner tilt & peel animation
+//   // Ensure all pages use hard density for smooth 3D GPU flipping
 //   try {
 //     const pages = pageFlip.getPageCollection()?.getPages() || [];
-//     pages.forEach((p) => {
-//       p.setDensity('soft');
+//     pages.forEach((page) => {
+//       if (page && typeof page.setDensity === 'function') {
+//         page.setDensity('hard');
+//       }
 //     });
-//   } catch (err) {
-//     console.debug('Soft density configuration:', err);
+//   } catch (error) {
+//     console.debug('GETGOAL Flipbook: hard density configuration error:', error);
 //   }
 
-//   const updateIndicator = (pageIndex) => {
-//     if (currentEl) currentEl.textContent = String(Math.min(pageIndex + 1, total));
-//     if (prevBtn) prevBtn.disabled = pageIndex <= 0;
-//     if (nextBtn) nextBtn.disabled = pageIndex >= total - 1;
-//   };
+//   /* -------------------------------------------------------
+//      STATE & TIMING
+//   ------------------------------------------------------- */
 
-//   pageFlip.on('flip', (e) => {
-//     updateIndicator(e.data);
-//     gsap.fromTo(
-//       root.querySelectorAll('.jia-fb-page.--current, .jia-fb-page.--right, .jia-fb-page.--left'),
-//       { filter: 'brightness(0.94)' },
-//       { filter: 'brightness(1)', duration: 0.35, ease: 'power2.out' }
-//     );
+//   let isFlipping = false;
+//   let currentPage = 0;
+//   let lastFlipTime = 0;
+//   let flipSafetyTimer = null;
+
+//   function clearSafetyTimer() {
+//     if (flipSafetyTimer) {
+//       clearTimeout(flipSafetyTimer);
+//       flipSafetyTimer = null;
+//     }
+//   }
+
+//   function setFlippingState(flipping) {
+//     isFlipping = flipping;
+//     clearSafetyTimer();
+
+//     if (flipping) {
+//       root.classList.add('jia-is-flipping');
+//       // Safety release timeout ensures the flipbook NEVER stays stuck
+//       flipSafetyTimer = setTimeout(() => {
+//         isFlipping = false;
+//         root.classList.remove('jia-is-flipping');
+//         updateButtonState();
+//       }, 950);
+//     } else {
+//       root.classList.remove('jia-is-flipping');
+//     }
+//     updateButtonState();
+//   }
+
+//   /* -------------------------------------------------------
+//      SAFETY GUARD: PREVENT FLIPPING PAST LAST SPREAD
+//   ------------------------------------------------------- */
+
+//   try {
+//     const flipController =
+//       pageFlip.getFlipController?.() || pageFlip.flipController;
+
+//     if (flipController && typeof flipController.checkDirection === 'function') {
+//       const origCheckDirection = flipController.checkDirection.bind(flipController);
+//       flipController.checkDirection = function (direction) {
+//         // 0 is FlipDirection.FORWARD
+//         if (direction === 0 && currentPage >= total - 2) {
+//           return false;
+//         }
+//         return origCheckDirection(direction);
+//       };
+//     }
+//   } catch (err) {
+//     console.debug('GETGOAL Flipbook: checkDirection guard error:', err);
+//   }
+
+//   /* -------------------------------------------------------
+//      UPDATE UI & INDICATORS
+//   ------------------------------------------------------- */
+
+//   function updateIndicator(pageIndex) {
+//     currentPage = Math.max(0, Math.min(pageIndex, total - 1));
+
+//     if (currentEl) {
+//       if (currentPage === 0) {
+//         currentEl.textContent = 'Cover';
+//       } else {
+//         const leftPage = currentPage;
+//         const rightPage = Math.min(currentPage + 1, total - 1);
+//         currentEl.textContent = `${leftPage}-${rightPage}`;
+//       }
+//     }
+
+//     if (prevBtn) {
+//       prevBtn.disabled = currentPage <= 0;
+//     }
+
+//     if (nextBtn) {
+//       nextBtn.disabled = currentPage >= total - 2;
+//     }
+
+//     if (currentPage >= total - 2) {
+//       root.classList.add('jia-last-spread');
+//     } else {
+//       root.classList.remove('jia-last-spread');
+//     }
+
+//     preloadNearbyImages(images, currentPage);
+//     updateVideosVisibility(currentPage);
+//   }
+
+//   /* -------------------------------------------------------
+//      VIDEO PLAYBACK MANAGEMENT
+//      Only plays videos on currently visible pages to ensure
+//      60fps performance and zero lag on mobile and desktop.
+//   ------------------------------------------------------- */
+
+//   function updateVideosVisibility(currentIndex) {
+//     try {
+//       const allVideos = bookEl.querySelectorAll('video');
+//       allVideos.forEach((v) => {
+//         const page = v.closest('.jia-fb-page');
+//         if (!page) return;
+//         const idx = Number(page.getAttribute('data-page-index') || -1);
+
+//         // When at cover (index 0), pause all video elements
+//         if (currentIndex === 0) {
+//           try { v.pause(); } catch (e) {}
+//           return;
+//         }
+
+//         // On active spread, play the left and right pages
+//         const shouldPlay = idx === currentIndex || idx === currentIndex + 1;
+//         if (shouldPlay) {
+//           try {
+//             if (v.paused) {
+//               const p = v.play();
+//               if (p !== undefined) p.catch(() => {});
+//             }
+//           } catch (e) {}
+//         } else {
+//           try {
+//             if (!v.paused) v.pause();
+//           } catch (e) {}
+//         }
+//       });
+//     } catch (e) {
+//       console.debug('updateVideosVisibility error:', e);
+//     }
+//   }
+
+//   /* -------------------------------------------------------
+//      BUTTON STATE
+//   ------------------------------------------------------- */
+
+//   function updateButtonState() {
+//     if (prevBtn) {
+//       prevBtn.disabled = isFlipping || currentPage <= 0;
+//     }
+//     if (nextBtn) {
+//       nextBtn.disabled = isFlipping || currentPage >= total - 2;
+//     }
+//   }
+
+//   /* -------------------------------------------------------
+//      FLIP STATE LISTENERS
+//   ------------------------------------------------------- */
+
+//   /**
+//    * FLIP LIGHT SWEEP EFFECT
+//    * Animates .jia-fb-flip-light overlays on all visible pages
+//    * during a flip to simulate real light glancing off paper.
+//    */
+//   function triggerFlipLightEffect() {
+//     const lights = bookEl.querySelectorAll('.jia-fb-flip-light');
+//     lights.forEach((el) => {
+//       gsap.killTweensOf(el);
+//       gsap.fromTo(
+//         el,
+//         {
+//           opacity: 0,
+//           x: '-60%',
+//         },
+//         {
+//           opacity: 1,
+//           x: '60%',
+//           duration: 0.55,
+//           ease: 'power2.inOut',
+//           onComplete: () => {
+//             gsap.to(el, {
+//               opacity: 0,
+//               duration: 0.25,
+//               ease: 'power1.out',
+//             });
+//           },
+//         }
+//       );
+//     });
+//   }
+
+//   function clearFlipLightEffect() {
+//     const lights = bookEl.querySelectorAll('.jia-fb-flip-light');
+//     lights.forEach((el) => {
+//       gsap.killTweensOf(el);
+//       gsap.to(el, { opacity: 0, duration: 0.2, ease: 'power1.out' });
+//     });
+//   }
+
+//   pageFlip.on('changeState', (event) => {
+//     const state = event.data;
+
+//     if (state === 'flipping' || state === 'user_fold') {
+//       if (currentPage === 0) {
+//         root.classList.remove('jia-cover-view');
+//         updateVideosVisibility(1);
+//       }
+//     }
+
+//     if (state === 'flipping') {
+//       setFlippingState(true);
+//       triggerFlipLightEffect();
+//     }
+
+//     if (state === 'read') {
+//       setFlippingState(false);
+//       updateVideosVisibility(currentPage);
+//       clearFlipLightEffect();
+//     }
 //   });
+
+//   pageFlip.on('flip', (event) => {
+//     const pageIndex = Number(event.data);
+//     updateIndicator(pageIndex);
+
+//     if (pageIndex === 0) {
+//       root.classList.add('jia-cover-view');
+//     } else {
+//       root.classList.remove('jia-cover-view');
+//     }
+
+//     setFlippingState(false);
+//     clearFlipLightEffect();
+//   });
+
+//   /* -------------------------------------------------------
+//      INITIALIZATION
+//   ------------------------------------------------------- */
 
 //   pageFlip.on('init', () => {
 //     updateIndicator(0);
+//     setFlippingState(false);
+
 //     if (loader) {
 //       gsap.to(loader, {
 //         opacity: 0,
-//         duration: 0.4,
-//         onComplete: () => loader.remove(),
+//         duration: 0.35,
+//         ease: 'power2.out',
+//         onComplete: () => {
+//           if (loader) loader.remove();
+//         },
 //       });
 //     }
 
-//     // Entrance animation for the whole book.
+//     // Gentle book entrance
 //     gsap.fromTo(
 //       bookEl,
-//       { opacity: 0, y: 50, scale: 0.94, rotateX: 8 },
+//       { opacity: 0, y: 25, scale: 0.98 },
 //       {
 //         opacity: 1,
 //         y: 0,
 //         scale: 1,
-//         rotateX: 0,
-//         duration: 1,
+//         duration: 0.8,
 //         ease: 'power3.out',
-//         clearProps: 'transform',
+//         clearProps: 'opacity,y',
 //       }
 //     );
 
-//     // A gentle "come flip me" hint on the corner of the first page.
-//     gsap.fromTo(
-//       soundHintTargets,
-//       { opacity: 0 },
-//       { opacity: 1, duration: 0.6, delay: 0.8 }
-//     );
-//     gsap.to(root.querySelector('.jia-fb-corner-hint'), {
-//       x: -18,
-//       duration: 0.9,
-//       delay: 1.1,
-//       repeat: 3,
-//       yoyo: true,
-//       ease: 'power1.inOut',
+//     // Corner hint animation if present
+//     const cornerHint = root.querySelector('.jia-fb-corner-hint');
+//     if (cornerHint) {
+//       gsap.to(cornerHint, {
+//         x: -10,
+//         duration: 0.75,
+//         delay: 0.8,
+//         repeat: 3,
+//         yoyo: true,
+//         ease: 'power1.inOut',
+//       });
+//     }
+//   });
+
+//   /* -------------------------------------------------------
+//      PROGRAMMATIC FLIP CONTROLS
+//   ------------------------------------------------------- */
+
+//   function goNext() {
+//     const now = Date.now();
+//     if (isFlipping || now - lastFlipTime < 700) return;
+//     if (currentPage >= total - 2) return;
+
+//     lastFlipTime = now;
+//     setFlippingState(true);
+
+//     if (currentPage === 0) {
+//       root.classList.remove('jia-cover-view');
+//     }
+
+//     preloadNearbyImages(images, currentPage + 2);
+//     pageFlip.flipNext();
+//   }
+
+//   function goPrevious() {
+//     const now = Date.now();
+//     if (isFlipping || now - lastFlipTime < 700) return;
+//     if (currentPage <= 0) return;
+
+//     lastFlipTime = now;
+//     setFlippingState(true);
+
+//     preloadNearbyImages(images, currentPage - 2);
+//     pageFlip.flipPrev();
+//   }
+
+//   /* -------------------------------------------------------
+//      CLICK TO FLIP COVER & BOOK
+//      When on the cover (page 0), clicking anywhere on the book
+//      instantly and smoothly opens the flipbook.
+//   ------------------------------------------------------- */
+
+//   bookEl.addEventListener('click', (e) => {
+//     if (e.target.closest('button, a, input, select, textarea, .jia-flipbook-toolbar')) {
+//       return;
+//     }
+
+//     if (currentPage === 0) {
+//       e.stopPropagation();
+//       goNext();
+//     }
+//   });
+
+//   /* -------------------------------------------------------
+//      MOBILE TOUCH INTERACTION FOR COVER
+//   ------------------------------------------------------- */
+
+//   let coverTouchStartX = 0;
+//   let coverTouchStartY = 0;
+//   let coverTouchStartTime = 0;
+
+//   bookEl.addEventListener(
+//     'touchstart',
+//     (e) => {
+//       if (currentPage !== 0) return;
+//       const t = e.touches[0];
+//       if (!t) return;
+//       coverTouchStartX = t.clientX;
+//       coverTouchStartY = t.clientY;
+//       coverTouchStartTime = Date.now();
+//     },
+//     { passive: true }
+//   );
+
+//   bookEl.addEventListener(
+//     'touchend',
+//     (e) => {
+//       if (currentPage !== 0 || coverTouchStartTime === 0) return;
+//       const dt = Date.now() - coverTouchStartTime;
+//       coverTouchStartTime = 0;
+//       const t = e.changedTouches[0];
+//       if (!t) return;
+
+//       const dx = Math.abs(t.clientX - coverTouchStartX);
+//       const dy = Math.abs(t.clientY - coverTouchStartY);
+
+//       // Quick tap or swipe left on the cover opens the book
+//       if ((dx < 25 && dy < 25 && dt < 450) || (coverTouchStartX - t.clientX > 30)) {
+//         goNext();
+//       }
+//     },
+//     { passive: true }
+//   );
+
+//   /* -------------------------------------------------------
+//      TOOLBAR BUTTON EVENTS
+//   ------------------------------------------------------- */
+
+//   prevBtn?.addEventListener('click', goPrevious);
+//   nextBtn?.addEventListener('click', goNext);
+
+//   [prevBtn, nextBtn, fsBtn].forEach((button) => {
+//     if (!button) return;
+
+//     button.addEventListener('mouseenter', () => {
+//       if (button.disabled) return;
+//       gsap.to(button, { scale: 1.08, duration: 0.18, ease: 'power2.out' });
+//     });
+
+//     button.addEventListener('mouseleave', () => {
+//       gsap.to(button, { scale: 1, duration: 0.18, ease: 'power2.out' });
+//     });
+
+//     button.addEventListener('click', () => {
+//       if (button.disabled) return;
+//       gsap.fromTo(button, { scale: 0.92 }, { scale: 1, duration: 0.2, ease: 'back.out(2)' });
 //     });
 //   });
 
-//   // Toolbar interactions.
-//   prevBtn?.addEventListener('click', () => pageFlip.flipPrev());
-//   nextBtn?.addEventListener('click', () => pageFlip.flipNext());
-
-//   [prevBtn, nextBtn, fsBtn].forEach((btn) => {
-//     if (!btn) return;
-//     btn.addEventListener('mouseenter', () =>
-//       gsap.to(btn, { scale: 1.12, duration: 0.2, ease: 'power2.out' })
-//     );
-//     btn.addEventListener('mouseleave', () =>
-//       gsap.to(btn, { scale: 1, duration: 0.2, ease: 'power2.out' })
-//     );
-//     btn.addEventListener('click', () =>
-//       gsap.fromTo(btn, { scale: 0.85 }, { scale: 1, duration: 0.25, ease: 'back.out(3)' })
-//     );
-//   });
+//   /* -------------------------------------------------------
+//      FULLSCREEN
+//   ------------------------------------------------------- */
 
 //   fsBtn?.addEventListener('click', () => {
 //     if (!document.fullscreenElement) {
-//       root.requestFullscreen?.().catch(() => {});
+//       if (root.requestFullscreen) {
+//         root.requestFullscreen().catch(() => {});
+//       }
 //       root.classList.add('is-fullscreen');
 //     } else {
-//       document.exitFullscreen?.();
+//       if (document.exitFullscreen) {
+//         document.exitFullscreen().catch(() => {});
+//       }
 //       root.classList.remove('is-fullscreen');
 //     }
 //   });
 
 //   document.addEventListener('fullscreenchange', () => {
-//     if (!document.fullscreenElement) root.classList.remove('is-fullscreen');
-//     setTimeout(() => pageFlip.updateFromHtml?.(root.querySelectorAll('.jia-fb-page')), 50);
+//     if (!document.fullscreenElement) {
+//       root.classList.remove('is-fullscreen');
+//     }
+//     setTimeout(() => {
+//       if (typeof pageFlip.update === 'function') {
+//         pageFlip.update();
+//       }
+//     }, 100);
 //   });
 
-//   // Keyboard navigation when the flipbook has focus.
+//   /* -------------------------------------------------------
+//      KEYBOARD NAVIGATION
+//   ------------------------------------------------------- */
+
 //   root.setAttribute('tabindex', '0');
-//   root.addEventListener('keydown', (evt) => {
-//     if (evt.key === 'ArrowRight') pageFlip.flipNext();
-//     if (evt.key === 'ArrowLeft') pageFlip.flipPrev();
+//   root.addEventListener('keydown', (event) => {
+//     const tag = event.target?.tagName;
+//     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+//       return;
+//     }
+//     if (event.key === 'ArrowRight') {
+//       event.preventDefault();
+//       goNext();
+//     }
+//     if (event.key === 'ArrowLeft') {
+//       event.preventDefault();
+//       goPrevious();
+//     }
 //   });
 
-//   // Keep StPageFlip responsive on resize.
-//   window.addEventListener('resize', () => {
+//   /* -------------------------------------------------------
+//      RESPONSIVE RESIZE
+//   ------------------------------------------------------- */
+
+//   function handleResize() {
 //     clearTimeout(root._jiaResizeTimer);
 //     root._jiaResizeTimer = setTimeout(() => {
-//       pageFlip.update();
+//       if (typeof pageFlip.update === 'function') {
+//         pageFlip.update();
+//       }
+//       preloadNearbyImages(images, currentPage);
 //     }, 150);
-//   });
+//   }
+
+//   window.addEventListener('resize', handleResize, { passive: true });
+
+//   root._jiaPageFlip = pageFlip;
 // }
+
+// /* ---------------------------------------------------------
+//    INIT ALL FLIPBOOKS
+// --------------------------------------------------------- */
 
 // function initAll() {
 //   document.querySelectorAll('.jia-flipbook-wrap').forEach(initFlipbook);
@@ -1408,5 +1509,4 @@ window.JIAFlipbookInit = initAll;
 //   initAll();
 // }
 
-// // Re-scan in case content is injected later (e.g. Elementor/AJAX loaded pages).
 // window.JIAFlipbookInit = initAll;
