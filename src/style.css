@@ -179,6 +179,9 @@
     pointer-events: none;
     user-select: none;
     -webkit-user-drag: none;
+    /* GPU-promote the cover image so it paints immediately */
+    will-change: transform;
+    contain: strict;
 }
 
 /* ---------------------------------------------------------
