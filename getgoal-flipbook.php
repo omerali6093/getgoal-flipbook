@@ -183,6 +183,28 @@ final class JIA_Flipbook_Plugin {
 		if ( ! empty( $inline_css ) ) {
 			echo '<style id="getgoal-flipbook-core-css">' . $inline_css . '</style>';
 		}
+
+		// Preload the cover image so the browser fetches it at highest priority
+		// before it even parses the flipbook markup. This is the single biggest
+		// win for cover page load time on both mobile and desktop.
+		if ( ! empty( $images[0] ) ) {
+			$cover_url = esc_url( $images[0] );
+			$ext       = strtolower( pathinfo( $cover_url, PATHINFO_EXTENSION ) );
+			$mime_map  = array(
+				'webp' => 'image/webp',
+				'jpg'  => 'image/jpeg',
+				'jpeg' => 'image/jpeg',
+				'png'  => 'image/png',
+				'gif'  => 'image/gif',
+			);
+			if ( isset( $mime_map[ $ext ] ) ) {
+				printf(
+					'<link rel="preload" as="image" href="%s" type="%s" fetchpriority="high">',
+					$cover_url,
+					esc_attr( $mime_map[ $ext ] )
+				);
+			}
+		}
 		?>
 		<div
 			id="<?php echo esc_attr( $uid ); ?>"
