@@ -485,6 +485,9 @@
         min-height: 100svh;
         left: auto;
         transform: none;
+        background-position: center;
+        background-repeat: no-repeat;
+        overflow: hidden;
     }
 
     .jia-flipbook-stage {
